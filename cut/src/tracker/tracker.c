@@ -6,12 +6,40 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include "tracker.h"
 #include "../analyzer/analyzer.h"
 
+long get_proc(void);
+
 struct tracker {
     Analyzer* analyzer;
+    long proc;
 };
+
+/*
+    METHOD: Tracker_init
+    PURPOSE: creation of Tracker 'object'
+    RETURN: Tracker 'object' or NULL in 
+        case creation was not possible 
+*/
+long get_proc(
+    void
+) {
+    return sysconf(_SC_NPROCESSORS_ONLN);
+}
+
+/*
+    METHOD: Tracker_get_proc
+    PURPOSE: getter for a given Tracker 'object''s proc field
+    RETURN: long value in a given Tracker 'object''s proc field
+*/
+long Tracker_get_proc(
+    Tracker* tracker
+) {
+    return tracker -> proc;
+}
+
 
 /*
     METHOD: Tracker_init
@@ -24,6 +52,13 @@ Tracker* Tracker_init(
 ) {
     Tracker* tracker = (Tracker*) malloc(sizeof(Tracker*));
     tracker -> analyzer = Analyzer_init();
+    tracker -> proc = get_proc();
+
+    if (tracker -> proc == -1) {
+        Analyzer_free(tracker -> analyzer);
+        tracker -> proc = 0;
+        return NULL;
+    }
 
     return tracker;
 }
@@ -34,9 +69,9 @@ Tracker* Tracker_init(
     RETURN: nothing
 */
 void Tracker_start(
-    void
+    Tracker* tracker
 ) {
-
+    (void) tracker;
 }
 
 /*
@@ -48,5 +83,6 @@ void Tracker_free(
     Tracker* tracker
 ) {
     Analyzer_free(tracker -> analyzer);
+    tracker -> proc = 0;
     free(tracker);
 }

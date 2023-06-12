@@ -9,7 +9,7 @@
 #include <signal.h>
 #include "../tracker/tracker.h"
 
-void handle_sigterm(int);
+void handle_sigterm(int signum) __attribute__((noreturn));
 
 static Tracker* tracker;
 
@@ -21,6 +21,7 @@ static Tracker* tracker;
 void handle_sigterm(
     int signum
 ) {
+    (void) signum;
     printf("[MAIN]: SIGTERM HANDLER - INVOKING FREE ON TRACKER\n");
 
     Tracker_free(tracker); 
@@ -43,10 +44,10 @@ int main(
 
     signal(SIGINT, handle_sigterm);
 
-    while (1) {
-        printf("WORKING...\n");
-    }
-    
+    printf("CORES: %ld\n", Tracker_get_proc(tracker));
 
+    Tracker_start(tracker);
+    Tracker_free(tracker);
+    
     return 0;
 }

@@ -12,7 +12,8 @@
 typedef struct tracker Tracker;
 
 Tracker* Tracker_init(void);
-void Tracker_start(void);
+void Tracker_start(Tracker* tracker);
 void Tracker_free(Tracker* tracker);
+long Tracker_get_proc(Tracker* tracker);
 
 #endif 
