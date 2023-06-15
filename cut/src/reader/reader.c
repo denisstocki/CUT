@@ -14,8 +14,6 @@
 
 struct reader {
     FILE* file;
-    pthread_t thread;
-    volatile sig_atomic_t* trackerStatus;
     long countCores;
 };
 
@@ -74,6 +72,27 @@ ProcessorStats* Reader_read(
     processorStats -> cores = malloc(sizeof(CoreStats) * reader -> countCores);
     processorStats -> count = 0;
 
+    scan_single_stats(line, coreStats);
+
+    processorStats -> average = *coreStats;
+
+    while (processorStats -> count < reader -> countCores) {
+        if (fgets(line, sizeof(line), reader -> file) != NULL) {
+            coreStats = (CoreStats*) malloc(sizeof(CoreStats));
+            scan_single_stats(line, coreStats);
+            processorStats -> cores[processorStats -> count] = *coreStats;
+        } else {
+            return NULL;
+        }
+    }
+    
+    return processorStats;
+}
+
+void scan_single_stats(
+    char* line,
+    CoreStats* coreStats
+) {
     sscanf(
         line, 
         "%s %d %d %d %d %d %d %d %d",
@@ -87,32 +106,6 @@ ProcessorStats* Reader_read(
         &(coreStats -> sortirq),        
         &(coreStats -> steal)        
     );
-
-    processorStats -> average = *coreStats;
-
-    while (processorStats -> count < reader -> countCores) {
-        if (fgets(line, sizeof(line), reader -> file) != NULL) {
-            coreStats = (CoreStats*) malloc(sizeof(CoreStats));
-            sscanf(
-                line, 
-                "%s %d %d %d %d %d %d %d %d",
-                &(coreStats -> name),        
-                &(coreStats -> user),        
-                &(coreStats -> nice),        
-                &(coreStats -> system),        
-                &(coreStats -> idle),        
-                &(coreStats -> iowait),        
-                &(coreStats -> irq),        
-                &(coreStats -> sortirq),        
-                &(coreStats -> steal)        
-            );
-            processorStats -> cores[processorStats -> count] = *coreStats;
-        } else {
-            return NULL;
-        }
-    }
-    
-    return processorStats;
 }
 
 /*
