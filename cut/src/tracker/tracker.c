@@ -14,6 +14,7 @@
 #include "../printer/printer.h"
 #include "../reader/reader.h"
 #include "../logger/logger.h"
+#include "../buffer/buffer.h"
 
 #define BASENAME "TRACKER"
 
@@ -40,18 +41,6 @@ long get_proc(
 ) {
     return sysconf(_SC_NPROCESSORS_ONLN);
 }
-
-/*
-    METHOD: Tracker_get_proc
-    PURPOSE: getter for a given Tracker 'object''s proc field
-    RETURN: long value in a given Tracker 'object''s proc field
-*/
-long Tracker_get_proc(
-    Tracker* tracker
-) {
-    return tracker -> proc;
-}
-
 
 /*
     METHOD: Tracker_init
@@ -88,10 +77,12 @@ void Tracker_start(
     Tracker* tracker
 ) {
     tracker -> status = RUNNING;
-    while (tracker -> status == RUNNING) {
-        
-    }
     
+    pthread_t th_reader;
+
+    Buffer* buffer = Buffer_init();
+
+
 }
 
 /*
