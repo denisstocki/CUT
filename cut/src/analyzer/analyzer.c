@@ -8,8 +8,12 @@
 #include <stdlib.h>
 #include "analyzer.h"
 
+#define BASENAME "ANALYZER"
+
 struct analyzer {
+    Logger* logger;
     int value;
+    char padding[4];
 };
 
 /*
@@ -19,9 +23,10 @@ struct analyzer {
         case creation was not possible 
 */
 Analyzer* Analyzer_init(
-    void
+    Logger* logger
 ) {
     Analyzer* analyzer = (Analyzer*) malloc(sizeof(Analyzer*));
+    analyzer -> logger = logger;
     analyzer -> value = 0;
 
     return analyzer;

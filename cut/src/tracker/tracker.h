@@ -7,13 +7,30 @@
 #ifndef TRACKER_H
 #define TRACKER_H
 
+#include "../logger/logger.h"
+
 // Usage of pseudo objective 
 // encapsulation on struct tracker.
 typedef struct tracker Tracker;
 
-Tracker* Tracker_init(void);
+enum {
+    CREATED,
+    RUNNING, 
+    TERMINATED
+};
+
+static const char* const TrackerStatusNames[] = {
+    "CREATED",
+    "RUNNING",
+    "TERMINATED"
+};
+
+Tracker* Tracker_init(char* path);
 void Tracker_start(Tracker* tracker);
 void Tracker_free(Tracker* tracker);
 long Tracker_get_proc(Tracker* tracker);
+Logger* Tracker_get_logger(Tracker* tracker);
+int Tracker_set_status(Tracker* tracker, int status);
+int Tracker_get_status(Tracker* tracker);
 
 #endif 
