@@ -8,8 +8,6 @@
 #include <stdlib.h>
 #include "printer.h"
 
-#define BASENAME "PRINTER"
-
 struct printer {
     Logger* logger;
     int value;

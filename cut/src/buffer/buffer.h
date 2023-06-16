@@ -14,7 +14,7 @@
 
 typedef struct buffer Buffer;
 
-Buffer* Buffer_init();
+Buffer* Buffer_init(void);
 bool Buffer_isEmpty(Buffer*);
 bool Buffer_isFull(Buffer*);
 int Buffer_push(Buffer*, ProcessorStats*);

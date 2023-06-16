@@ -9,7 +9,6 @@
 #include <pthread.h>
 #include "logger.h"
 
-#define BASENAME "LOGGER"
 #define MAX_ENTRIES 32
 
 struct logger {
@@ -19,6 +18,7 @@ struct logger {
     int count;
     int head;
     int tail;
+    char padding[4];
     FILE* file;
 };
 

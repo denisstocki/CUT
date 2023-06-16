@@ -7,13 +7,14 @@
 #ifndef ANALYZER_H
 #define ANALYZER_H
 
-#include "../logger/logger.h"
+#include "../buffer/buffer.h"
 
 // Usage of pseudo objective 
 // encapsulation on struct analyzer.
 typedef struct analyzer Analyzer;
 
-Analyzer* Analyzer_init(Logger* logger);
+Analyzer* Analyzer_init(Buffer* buffer);
+int Analyzer_start(Analyzer*, volatile sig_atomic_t*);
 void Analyzer_free(Analyzer* analyzer);
 
 #endif 

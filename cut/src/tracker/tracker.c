@@ -8,6 +8,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <signal.h>
+#include <time.h>
 #include <stdatomic.h>  
 #include "tracker.h"
 #include "../analyzer/analyzer.h"
@@ -16,16 +18,10 @@
 #include "../logger/logger.h"
 #include "../buffer/buffer.h"
 
-#define BASENAME "TRACKER"
-
-long get_proc(void);
-
 struct tracker {
-    Printer* printer;
     Reader* reader;
+    Buffer* buffer_reader;
     Analyzer* analyzer;
-    Logger* logger;
-    long proc;
     volatile sig_atomic_t status;
     char padding[4];
 };
@@ -36,35 +32,53 @@ struct tracker {
     RETURN: Tracker 'object' or NULL in 
         case creation was not possible 
 */
-long get_proc(
+Tracker* Tracker_init(
     void
 ) {
-    return sysconf(_SC_NPROCESSORS_ONLN);
-}
-
-/*
-    METHOD: Tracker_init
-    PURPOSE: creation of Tracker 'object'
-    RETURN: Tracker 'object' or NULL in 
-        case creation was not possible 
-*/
-Tracker* Tracker_init(
-    char* path
-) {
+    printf("[TRACKER]: INIT STARTED\n");
     Tracker* tracker = (Tracker*) malloc(sizeof(Tracker));
-    tracker -> logger = Logger_init(path);
-    tracker -> analyzer = Analyzer_init(tracker -> logger);
-    tracker -> reader = Reader_init(get_proc());
-    tracker -> printer = Printer_init(tracker -> logger);
-    tracker -> proc = get_proc();
-    tracker -> status = ATOMIC_VAR_INIT(CREATED);
 
-    if (tracker -> proc == -1) {
-        Analyzer_free(tracker -> analyzer);
-        tracker -> proc = 0;
+    if (tracker == NULL) { return NULL; }
+
+    long proc = sysconf(_SC_NPROCESSORS_ONLN);
+    
+    if (proc <= 0) {
+        free(tracker);
         return NULL;
     }
 
+    Buffer* buffer_reader = Buffer_init();
+
+    if (buffer_reader == NULL) { 
+        free(tracker);
+        return NULL; 
+    }
+    
+    Reader* reader = Reader_init(buffer_reader, proc);
+
+    if (reader == NULL) {
+        free(tracker);
+        Buffer_free(buffer_reader);
+        return NULL;
+    }
+
+    Analyzer* analyzer = Analyzer_init(buffer_reader);
+
+    if (analyzer == NULL) {
+        free(tracker);
+        Buffer_free(buffer_reader);
+        Reader_free(reader);
+        return NULL;
+    }
+
+    *tracker = (Tracker) {
+        .reader = reader,
+        .buffer_reader = buffer_reader,
+        .analyzer = analyzer,
+        .status = ATOMIC_VAR_INIT(CREATED)
+    };
+
+    printf("[TRACKER]: INIT FINISHED\n");
     return tracker;
 }
 
@@ -76,13 +90,16 @@ Tracker* Tracker_init(
 void Tracker_start(
     Tracker* tracker
 ) {
+    printf("[TRACKER]: START STARTED\n");
+    if (tracker == NULL) { return; }
+
     tracker -> status = RUNNING;
-    
-    pthread_t th_reader;
 
-    Buffer* buffer = Buffer_init();
+    Reader_start(tracker -> reader, &(tracker -> status));
+    Analyzer_start(tracker -> analyzer, &(tracker -> status));
 
-
+    Tracker_free(tracker);
+    printf("[TRACKER]: START FINISHED\n");
 }
 
 /*
@@ -93,66 +110,30 @@ void Tracker_start(
 void Tracker_free(
     Tracker* tracker
 ) {
-    Analyzer_free(tracker -> analyzer);
-    Reader_free(tracker -> reader);
-    Printer_free(tracker -> printer);
-    Logger_free(tracker -> logger);
-    tracker -> proc = 0;
-    free(tracker);
-}
-
-/*
-    METHOD: Tracker_set_status
-    PURPOSE: sets status on a given tracker to a given status if possible
-    RETURN: 1 in case the change was made properly, else -1 
-*/
-int Tracker_set_status(
-    Tracker* tracker,
-    int status
-) {
-    printf("[MAIN]: SIGNAL HANDLER - TRACKER STATUS CHANGED\n");
-    Logger_log(tracker -> logger, BASENAME, "TRYING TO CHANGE STATUS");
-    switch (status) {
-        case RUNNING:
-            if (tracker -> status == CREATED){
-                tracker -> status = RUNNING;
-                return 1;
-            } else return -1;
-
-        case TERMINATED:
-            if (tracker -> status == RUNNING){
-                tracker -> status = TERMINATED;
-                return 1;
-            } else return -1;
+    printf("[TRACKER]: FREE STARTED\n");
+    if (tracker == NULL) { return; }
     
-        default:
-            return -1;
-    }
+    Buffer_free(tracker -> buffer_reader);
+    Reader_free(tracker -> reader);
+    Analyzer_free(tracker -> analyzer);
+    tracker -> status = 0;
+
+    free(tracker);
+    printf("[TRACKER]: FREE FINISHED\n");
 }
 
 /*
-    METHOD: Tracker_get_status
-    PURPOSE: returns status of a given tracker
-    RETURN: tracker's status field, else -1
+    METHOD: Tracker_terminate
+    PURPOSE: sets status on a given tracker to a TERMINATED status if possible
+    RETURN: nothing
 */
-int Tracker_get_status(
+void Tracker_terminate(
     Tracker* tracker
 ) {
-    if (tracker != NULL) { return tracker -> status; }
-    else return -1;
-}
+    printf("[TRACKER]: TERMINATE STARTED\n");
+    if (tracker == NULL) { return; }
+    if (tracker -> status == TERMINATED) { return; }
 
-/*
-    METHOD: Tracker_get_logger
-    PURPOSE: returns logger 'object' of a given tracker
-    RETURN: logger's object, else null
-*/
-Logger* Tracker_get_logger(
-    Tracker* tracker
-) {
-    if (tracker -> logger != NULL) {
-        return tracker -> logger;
-    } else {
-        return NULL;
-    }
+    tracker -> status = TERMINATED;
+    printf("[TRACKER]: TERMINATE FINISHED\n");
 }

@@ -25,6 +25,7 @@ typedef struct ProcessorStats {
     CoreStats average;
     CoreStats* cores;
     int count;
+    char padding[4];
 } ProcessorStats;
 
 #endif 

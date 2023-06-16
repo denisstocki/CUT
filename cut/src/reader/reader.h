@@ -8,13 +8,15 @@
 #define READER_H
 
 #include "../stats/stats.h"
+#include "../buffer/buffer.h"
 
 // Usage of pseudo objective 
 // encapsulation on struct reader.
 typedef struct reader Reader;
 
-Reader* Reader_init(const long);
-ProcessorStats* Reader_read(Reader* const);
+Reader* Reader_init(Buffer*, long); //ready
+int Reader_start(Reader*, volatile sig_atomic_t*); //ready
+int Reader_read(ProcessorStats*, long); //ready
 void Reader_free(Reader* const);
 
 #endif 

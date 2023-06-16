@@ -20,7 +20,7 @@ struct buffer {
     size_t tail;
     size_t head;
     size_t count;
-    int elements[CAPACITY];   
+    ProcessorStats elements[CAPACITY];   
 };
 
 /*
@@ -30,8 +30,9 @@ struct buffer {
         case creation was not possible 
 */
 Buffer* Buffer_init(
-
+    void
 ) {
+    printf("[BUFFER]: INIT STARTED\n");
     Buffer* buffer = malloc(sizeof(Buffer) + sizeof(ProcessorStats) * CAPACITY);
 
     if (buffer == NULL) { return NULL; }
@@ -45,7 +46,7 @@ Buffer* Buffer_init(
         .count = 0,
         .elements = {0}
     };
-
+    printf("[BUFFER]: INIT FINISHED\n");
     return buffer;
 }
 
@@ -57,6 +58,7 @@ Buffer* Buffer_init(
 bool Buffer_isEmpty(
     Buffer* buffer
 ) {
+    printf("[BUFFER]: ISEMPTY STARTED\n");
     if (buffer == NULL) { return false; }
 
     if (buffer -> count == 0) { return true; }
@@ -66,6 +68,7 @@ bool Buffer_isEmpty(
 bool Buffer_isFull(
     Buffer* buffer
 ) {
+    printf("[BUFFER]: ISFULL STARTED\n");
     if (buffer == NULL) { return false; }
 
     if (buffer -> count == CAPACITY) { return true; }
@@ -76,6 +79,7 @@ int Buffer_push(
     Buffer* buffer, 
     ProcessorStats* element
 ) {
+    printf("[BUFFER]: PUSH STARTED\n");
     if (buffer == NULL || element == NULL) { return -1; }
 
     pthread_mutex_lock(&buffer->mutex);
@@ -95,7 +99,7 @@ int Buffer_push(
 
     pthread_cond_signal(&(buffer -> can_consume));
     pthread_mutex_unlock(&(buffer -> mutex));
-
+    printf("[BUFFER]: PUSH FINISHED\n");
     return 1;
 }
 
@@ -103,6 +107,7 @@ int Buffer_pop(
     Buffer* buffer, 
     ProcessorStats* element
 ) {
+    printf("[BUFFER]: POP STARTED\n");
     if (buffer == NULL || element == NULL) { return -1; }
 
     pthread_mutex_lock(&(buffer -> mutex));
@@ -122,18 +127,24 @@ int Buffer_pop(
 
     pthread_cond_signal(&(buffer -> can_produce));
     pthread_mutex_unlock(&(buffer -> mutex));
-
+    printf("[BUFFER]: POP FINISHED\n");
     return 1;
 }
 
 void Buffer_free(
     Buffer* buffer
 ) {
+    printf("[BUFFER]: FREE STARTED\n");
     if (buffer == NULL) { return; }
 
     pthread_cond_destroy(&(buffer -> can_produce));
     pthread_cond_destroy(&(buffer -> can_consume));
     pthread_mutex_destroy(&(buffer -> mutex));
 
+    for (size_t i = 0; i < CAPACITY; i++) {
+        free(buffer -> elements[i].cores);  
+    }
+
     free(buffer);
+    printf("[BUFFER]: FREE FINISHED\n");
 }

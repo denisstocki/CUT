@@ -25,12 +25,10 @@ static const char* const TrackerStatusNames[] = {
     "TERMINATED"
 };
 
-Tracker* Tracker_init(char* path);
+Tracker* Tracker_init(void);
 void Tracker_start(Tracker* tracker);
 void Tracker_free(Tracker* tracker);
 long Tracker_get_proc(Tracker* tracker);
-Logger* Tracker_get_logger(Tracker* tracker);
-int Tracker_set_status(Tracker* tracker, int status);
-int Tracker_get_status(Tracker* tracker);
+void Tracker_terminate(Tracker* tracker);
 
 #endif 
