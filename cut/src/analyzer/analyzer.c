@@ -13,6 +13,7 @@
 
 // PROTOTYPE FUNCTIONS FOR INSIDE WORLD
 static void* Analyzer_threadf(void* args);
+static int Analyzer_analyze(Analyzer* analyzer, ProcessorStats*);
 
 // STRUCTURE FOR HOLDING ANALYZER OBJECT
 struct analyzer {
@@ -20,6 +21,7 @@ struct analyzer {
     pthread_t thread;
     bool thread_started;
     bool prev_analyzed;
+    char padding[6];
     long* cores_total_prev;
     long* cores_idle_prev;
     long cpu_total_prev;
@@ -80,15 +82,19 @@ int Analyzer_start(
 
     if (
         analyzer == NULL ||
-        status != RUNNING
+        *status != RUNNING
     ) { return ERR_PARAMS; }
 
-    ThreadParams params = (ThreadParams) {
+    ThreadParams* params = (ThreadParams*) malloc(sizeof(ThreadParams));
+
+    if (params == NULL) { return ERR_ALLOC; }
+
+    *params = (ThreadParams) {
         .analyzer = analyzer,
         .status = status
     };
 
-    if (pthread_create(&(analyzer -> thread), NULL, Analyzer_threadf, (void*) &params) != 0) {
+    if (pthread_create(&(analyzer -> thread), NULL, Analyzer_threadf, (void*) params) != 0) {
         return ERR_CREATE;
     }
 
@@ -106,7 +112,7 @@ int Analyzer_join(
 
     if (analyzer == NULL) { return ERR_PARAMS; }
     if (analyzer -> thread_started == false) { return ERR_PARAMS; }
-    if (pthread_join(&(analyzer -> thread), NULL) != 0) {
+    if (pthread_join(analyzer -> thread, NULL) != 0) {
         return ERR_JOIN;
     }
 
@@ -128,15 +134,18 @@ static void* Analyzer_threadf(
     ThreadParams* params = (ThreadParams*)args;
     ProcessorStats stats;
     struct timespec sleepTime;
-    
+    printf("STATUSIK: %d\n", *(params -> status));
     while (*(params -> status) == RUNNING) {
+        printf("CO SIE DZIEJE CHUI\n");
         if (Buffer_pop(params -> analyzer -> buffer, &stats) != SUCCESS) {
+            printf("NO ZJEBAloSIE\n");
             break;
         }
         
         if (Analyzer_analyze(params -> analyzer, &stats) != SUCCESS) {
             break;
         }
+            printf("SIEMA2\n");
         
         free(stats.cores);
         
@@ -156,17 +165,14 @@ static void* Analyzer_threadf(
     PURPOSE: counts percentage for each core in a given ProcessorStats
     RETURN: interger meaning if the operation successed or failed with an error
 */
-int Analyzer_analyze(
+static int Analyzer_analyze(
     Analyzer* analyzer,
     ProcessorStats* processorStats
 ) {
     if (processorStats == NULL || analyzer == NULL) { return ERR_PARAMS; }
     
-    CoreStats coreStats;
-
-    coreStats = processorStats -> average;
-
     printf("[SUCCESS]\n");
+
     return SUCCESS;
 }
 

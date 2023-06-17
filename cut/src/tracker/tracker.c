@@ -61,7 +61,7 @@ Tracker* Tracker_init(
 
     if (reader == NULL) {
         free(tracker);
-        Buffer_destroy(bufferRA);
+        Buffer_free(bufferRA);
         return NULL;
     }
 
@@ -69,7 +69,7 @@ Tracker* Tracker_init(
 
     if (analyzer == NULL) {
         free(tracker);
-        Buffer_destroy(bufferRA);
+        Buffer_free(bufferRA);
         Reader_destroy(reader);
         return NULL;
     }
@@ -105,17 +105,22 @@ int Tracker_start(
         Tracker_destroy(tracker);
         return ERR_RUN;
     }
-
-    if (Analyzer_start(tracker -> analyzer, &(tracker -> status)) != SUCCESS) {
-        Tracker_destroy(tracker);
-        return ERR_RUN;
-    }
-
+    // printf("[STATUS]: %d\n", tracker -> status);
+    // if (Analyzer_start(tracker -> analyzer, &(tracker -> status)) != SUCCESS) {
+    //     Tracker_destroy(tracker);
+    //     return ERR_RUN;
+    // }
+    printf("[STATUS]: %d\n", tracker -> status);
     if (Reader_join(tracker -> reader)) {
         Tracker_destroy(tracker);
         return ERR_JOIN;
     }
-
+    // printf("[STATUS]: %d\n", tracker -> status);
+    // if (Analyzer_join(tracker -> analyzer)) {
+    //     Tracker_destroy(tracker);
+    //     return ERR_JOIN;
+    // }
+    printf("[STATUS]: %d\n", tracker -> status);
     Tracker_destroy(tracker);
 
     printf("[TRACKER]: START FINISHED\n");
@@ -157,7 +162,7 @@ void Tracker_destroy(
 
     if (tracker == NULL) { return; }
     
-    Buffer_destroy(tracker -> bufferRA);
+    Buffer_free(tracker -> bufferRA);
     Reader_destroy(tracker -> reader);
     Analyzer_destroy(tracker -> analyzer);
 

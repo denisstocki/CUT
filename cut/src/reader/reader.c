@@ -23,6 +23,7 @@ struct reader {
     Buffer* buffer;
     pthread_t thread;
     bool thread_started;
+    char padding[7];
     long proc;
 };
 
@@ -76,15 +77,19 @@ int Reader_start(
 
     if (
         reader == NULL ||
-        status != RUNNING
+        *status != RUNNING
     ) { return ERR_PARAMS; }
 
-    ThreadParams params = (ThreadParams) {
+    ThreadParams* params = (ThreadParams*) malloc(sizeof(ThreadParams));
+
+    if (params == NULL) { return ERR_ALLOC; }
+
+    *params = (ThreadParams) {
         .reader = reader,
         .status = status
     };
 
-    if (pthread_create(&(reader -> thread), NULL, Reader_threadf, (void*) &params) != 0) {
+    if (pthread_create(&(reader -> thread), NULL, Reader_threadf, (void*) params) != 0) {
         return ERR_CREATE;
     }
 
@@ -102,7 +107,7 @@ int Reader_join(
 
     if (reader == NULL) { return ERR_PARAMS; }
     if (reader -> thread_started == false) { return ERR_PARAMS; }
-    if (pthread_join(&(reader -> thread), NULL) != 0) {
+    if (pthread_join(reader -> thread, NULL) != 0) {
         return ERR_JOIN;
     }
 
@@ -124,14 +129,18 @@ static void* Reader_threadf(
     ThreadParams* params = (ThreadParams*) args;
     ProcessorStats stats;
     struct timespec sleepTime;
-    
+
+    printf("STATUSIK: %d\n", *(params -> status));
+
     while (*(params -> status) == RUNNING) {
         if (Reader_read(&stats, params -> reader -> proc) != SUCCESS) {
+            printf("TUATA1\n");
             free(stats.cores);
             break;
         }
         
         if (Buffer_push(params -> reader -> buffer, &stats) != SUCCESS) {
+            printf("TUATA2\n");
             free(stats.cores);
             break;
         }
@@ -172,8 +181,8 @@ int Reader_read(
         fclose(file);
         return ERR_FILE_READ; 
     }
-
-    if (sscanf(
+printf("%s\n", line);
+    printf("%d\n", sscanf(
         line, 
         "%s %d %d %d %d %d %d %d %d",
         processorStats -> average.name,
@@ -185,10 +194,12 @@ int Reader_read(
         &(processorStats -> average.irq),
         &(processorStats -> average.sortirq),
         &(processorStats -> average.steal)
-    ) != 9) {
-        fclose(file);
-        return ERR_READ;
-    }
+    ));
+
+    printf("%s\n", processorStats -> average.name);
+    printf("%d\n", processorStats -> average.user);
+
+    printf("%s\n", line);
 
     processorStats -> cores = (CoreStats*) malloc(sizeof(CoreStats) * (unsigned long) proc);
 
@@ -208,8 +219,8 @@ int Reader_read(
         } 
         
         coreStats = &(processorStats -> cores[coreCount]);
-
-        if (sscanf(
+        printf("slifjalef\n");
+        printf("%d\n", sscanf(
             line, 
             "%s %d %d %d %d %d %d %d %d",
             coreStats -> name,
@@ -221,11 +232,7 @@ int Reader_read(
             &(coreStats -> irq),
             &(coreStats -> sortirq),
             &(coreStats -> steal)
-        ) != 9) {
-            fclose(file);
-            free(processorStats -> cores);
-            return ERR_READ;
-        }
+        ));
     }
 
     fclose(file);
