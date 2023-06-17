@@ -7,21 +7,26 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
-#include <signal.h>
+#include <stdbool.h>
 #include "reader.h"
 #include "../enums/enums.h"
 
+// PATH FOR FILE THAT READER WILL RECEIVE DATA FROM
 #define PATH "/proc/stat"
 
-static void* Reader_thread_function(void* args);
+// PROTOTYPE FUNCTIONS FOR INSIDE WORLD
+int Reader_read(ProcessorStats* const, const long);
+static void* Reader_threadf(void* const);
 
-// READER STRUCTURE: holds reader object
+// STRUCTURE FOR HOLDING READER OBJECT
 struct reader {
     Buffer* buffer;
+    pthread_t thread;
+    bool thread_started;
     long proc;
 };
 
-// THREADPARAMS STRUCTURE: holds params used by thread function
+// STRUCTURE FOR HOLDING PARAMS PASSED TO READER THREAD FUNCTION
 typedef struct ThreadParams {
     Reader* reader;
     volatile sig_atomic_t* status;
@@ -34,23 +39,25 @@ typedef struct ThreadParams {
         case creation was not possible 
 */
 Reader* Reader_init(
-    Buffer* buffer,
-    long proc
+    Buffer* const buffer,
+    const long proc
 ) {
     printf("[READER]: INIT STARTED\n");
+
     if (proc <= 0 || buffer == NULL) { return NULL; }
     
-    Reader* reader = malloc(sizeof(Reader));
+    Reader* reader = (Reader*) malloc(sizeof(Reader));
     
-    if (reader == NULL) { 
-        return NULL; 
-    }
+    if (reader == NULL) { return NULL; }
 
     *reader = (Reader) { 
         .buffer = buffer,
+        .thread_started = false,
         .proc = proc
     };
+
     printf("[READER]: INIT FINISHED\n");
+
     return reader;
 }
 
@@ -62,31 +69,45 @@ Reader* Reader_init(
         worked propely
 */
 int Reader_start(
-    Reader* reader,
+    Reader* const reader,
     volatile sig_atomic_t* status
 ) {
     printf("[READER]: START STARTED\n");
+
     if (
         reader == NULL ||
-        status == CREATED
+        status != RUNNING
     ) { return ERR_PARAMS; }
 
-    ThreadParams* params = malloc(sizeof(ThreadParams));
-
-    if (params == NULL) { return ERR_ALLOC; }
-    
-    pthread_t thread;
-
-    *params = (ThreadParams) {
+    ThreadParams params = (ThreadParams) {
         .reader = reader,
         .status = status
     };
 
-    pthread_create(&thread, NULL, Reader_thread_function, (void*)params);
-    pthread_join(thread, NULL);
+    if (pthread_create(&(reader -> thread), NULL, Reader_threadf, (void*) &params) != 0) {
+        return ERR_CREATE;
+    }
 
-    free(params);
+    reader -> thread_started = true;
+
     printf("[READER]: START FINISHED\n");
+
+    return SUCCESS;
+}
+
+int Reader_join(
+    Reader* const reader
+) {
+    printf("[READER]: JOIN STARTED\n");
+
+    if (reader == NULL) { return ERR_PARAMS; }
+    if (reader -> thread_started == false) { return ERR_PARAMS; }
+    if (pthread_join(&(reader -> thread), NULL) != 0) {
+        return ERR_JOIN;
+    }
+
+    printf("[READER]: JOIN FINISHED\n");
+
     return SUCCESS;
 }
 
@@ -95,29 +116,34 @@ int Reader_start(
     PURPOSE: acomplishing reader's thread work
     RETURN: NULL
 */
-static void* Reader_thread_function(
-    void* args
+static void* Reader_threadf(
+    void* const args
 ) {
     printf("[READER]: THREAD FUNCTION STARTED\n");
-    ThreadParams* params = (ThreadParams*)args;
 
+    ThreadParams* params = (ThreadParams*) args;
+    ProcessorStats stats;
     struct timespec sleepTime;
     
     while (*(params -> status) == RUNNING) {
-        ProcessorStats stats;
         if (Reader_read(&stats, params -> reader -> proc) != SUCCESS) {
             free(stats.cores);
-            pthread_exit(NULL);
+            break;
         }
         
-        Buffer_push(params -> reader -> buffer, &stats);
+        if (Buffer_push(params -> reader -> buffer, &stats) != SUCCESS) {
+            free(stats.cores);
+            break;
+        }
 
         sleepTime.tv_sec = 1;
         sleepTime.tv_nsec = 0;
 
         nanosleep(&sleepTime, NULL);
     }
+
     printf("[READER]: THREAD FUNTION FINISHED\n");
+
     pthread_exit(NULL);
 }
 
@@ -127,10 +153,13 @@ static void* Reader_thread_function(
     RETURN: Stats 'object' including necessary data or null
 */
 int Reader_read(
-    ProcessorStats* processorStats,
-    long proc
+    ProcessorStats* const processorStats,
+    const long proc
 ) {
     printf("[READER]: READ STARTED\n");
+
+    if (processorStats == NULL || proc <= 0) { return ERR_PARAMS; }
+    
     FILE* file = fopen(PATH, "r");
 
     if (file == NULL) {
@@ -143,70 +172,88 @@ int Reader_read(
         fclose(file);
         return ERR_FILE_READ; 
     }
-    printf("[LINE]: %s\n", line);
-    sscanf(
+
+    if (sscanf(
         line, 
         "%s %d %d %d %d %d %d %d %d",
-        processorStats->average.name,
-        &(processorStats->average.user),
-        &(processorStats->average.nice),
-        &(processorStats->average.system),
-        &(processorStats->average.idle),
-        &(processorStats->average.iowait),
-        &(processorStats->average.irq),
-        &(processorStats->average.sortirq),
-        &(processorStats->average.steal)
-    );
+        processorStats -> average.name,
+        &(processorStats -> average.user),
+        &(processorStats -> average.nice),
+        &(processorStats -> average.system),
+        &(processorStats -> average.idle),
+        &(processorStats -> average.iowait),
+        &(processorStats -> average.irq),
+        &(processorStats -> average.sortirq),
+        &(processorStats -> average.steal)
+    ) != 9) {
+        fclose(file);
+        return ERR_READ;
+    }
 
-    processorStats -> cores = (CoreStats*) malloc(sizeof(CoreStats) * (unsigned long)proc);
+    processorStats -> cores = (CoreStats*) malloc(sizeof(CoreStats) * (unsigned long) proc);
 
     if (processorStats -> cores == NULL) {
         fclose(file);
         return ERR_ALLOC; 
     }
 
+    CoreStats* coreStats;
     int coreCount = 0;
 
-    while (coreCount < proc && fgets(line, sizeof(line), file) != NULL) {
-        CoreStats* coreStats = &(processorStats -> cores[coreCount]);
-        printf("[LINE]: %s\n", line);
-        sscanf(
+    while (coreCount++ < proc) {
+        if (fgets(line, sizeof(line), file) == NULL) {
+            fclose(file);
+            free(processorStats -> cores);
+            return ERR_FILE_READ;
+        } 
+        
+        coreStats = &(processorStats -> cores[coreCount]);
+
+        if (sscanf(
             line, 
             "%s %d %d %d %d %d %d %d %d",
-            coreStats->name,
-            &(coreStats->user),
-            &(coreStats->nice),
-            &(coreStats->system),
-            &(coreStats->idle),
-            &(coreStats->iowait),
-            &(coreStats->irq),
-            &(coreStats->sortirq),
-            &(coreStats->steal)
-        );
-
-        coreCount++;
+            coreStats -> name,
+            &(coreStats -> user),
+            &(coreStats -> nice),
+            &(coreStats -> system),
+            &(coreStats -> idle),
+            &(coreStats -> iowait),
+            &(coreStats -> irq),
+            &(coreStats -> sortirq),
+            &(coreStats -> steal)
+        ) != 9) {
+            fclose(file);
+            free(processorStats -> cores);
+            return ERR_READ;
+        }
     }
 
     fclose(file);
 
     processorStats -> count = coreCount;
+
     printf("[READER]: READ FINISHED\n");
+
     return SUCCESS; 
 }
 
 /*
-    METHOD: Reader_free
+    METHOD: Reader_destroy
     PURPOSE: frees reserved memory for a given Reader 'object' and its nested 'objects'
     RETURN: Reader 'object' or NULL in 
         case creation was not possible 
 */
-void Reader_free(
+void Reader_destroy(
     Reader* const reader
 ) {
-    printf("[READER]: FREE STARTED\n");
+    printf("[READER]: DESTROY STARTED\n");
+
     if (reader == NULL) { return; }
 
     reader -> proc = 0;
+    reader -> thread_started = false;
+
     free(reader);
-    printf("[READER]: FREE FINISHED\n");
+
+    printf("[READER]: DESTROY FINISHED\n");
 }

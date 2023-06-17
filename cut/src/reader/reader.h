@@ -7,16 +7,20 @@
 #ifndef READER_H
 #define READER_H
 
+// OUTSIDE LIBRARIES
+#include <signal.h>
+
+// INSIDE LIBRARIES
 #include "../stats/stats.h"
 #include "../buffer/buffer.h"
 
-// Usage of pseudo objective 
-// encapsulation on struct reader.
+// ENCAPSULATION ON READER OBJECT
 typedef struct reader Reader;
 
-Reader* Reader_init(Buffer*, long); //ready
-int Reader_start(Reader*, volatile sig_atomic_t*); //ready
-int Reader_read(ProcessorStats*, long); //ready
-void Reader_free(Reader* const);
+// PROTOTYPE FUNCTIONS FOR OUTSIDE WORLD
+Reader* Reader_init(Buffer* const, const long); //ready
+int Reader_start(Reader* const, volatile sig_atomic_t*); 
+int Reader_join(Reader* const);
+void Reader_destroy(Reader* const);
 
 #endif 

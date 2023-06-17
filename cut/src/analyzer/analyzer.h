@@ -7,14 +7,19 @@
 #ifndef ANALYZER_H
 #define ANALYZER_H
 
+// OUTSIDE LIBRARIES
+#include <signal.h>
+
+// INSIDE LIBRARIES
 #include "../buffer/buffer.h"
 
-// Usage of pseudo objective 
-// encapsulation on struct analyzer.
+// ENCAPSULATION ON READER OBJECT
 typedef struct analyzer Analyzer;
 
-Analyzer* Analyzer_init(Buffer* buffer);
-int Analyzer_start(Analyzer*, volatile sig_atomic_t*);
-void Analyzer_free(Analyzer* analyzer);
+// PROTOTYPE FUNCTIONS FOR OUTSIDE WORLD
+Analyzer* Analyzer_init(Buffer* const, const long);
+int Analyzer_start(Analyzer* const, volatile sig_atomic_t*);
+int Analyzer_join(Analyzer* const);
+void Analyzer_destroy(Analyzer* const);
 
 #endif 

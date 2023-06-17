@@ -18,6 +18,10 @@ enum {
     ERR_PARAMS,
     ERR_FILE_OPEN,
     ERR_FILE_READ,
+    ERR_CREATE,
+    ERR_JOIN,
+    ERR_READ,
+    ERR_RUN,
     SUCCESS
 };
 

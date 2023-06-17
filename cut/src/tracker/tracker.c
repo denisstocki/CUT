@@ -17,10 +17,12 @@
 #include "../reader/reader.h"
 #include "../logger/logger.h"
 #include "../buffer/buffer.h"
+#include "../enums/enums.h"
 
+// STRUCTURE FOR HOLDING TRACKER OBJECT
 struct tracker {
     Reader* reader;
-    Buffer* buffer_reader;
+    Buffer* bufferRA;
     Analyzer* analyzer;
     volatile sig_atomic_t status;
     char padding[4];
@@ -36,6 +38,7 @@ Tracker* Tracker_init(
     void
 ) {
     printf("[TRACKER]: INIT STARTED\n");
+
     Tracker* tracker = (Tracker*) malloc(sizeof(Tracker));
 
     if (tracker == NULL) { return NULL; }
@@ -47,38 +50,39 @@ Tracker* Tracker_init(
         return NULL;
     }
 
-    Buffer* buffer_reader = Buffer_init();
+    Buffer* bufferRA = Buffer_init();
 
-    if (buffer_reader == NULL) { 
+    if (bufferRA == NULL) { 
         free(tracker);
         return NULL; 
     }
     
-    Reader* reader = Reader_init(buffer_reader, proc);
+    Reader* reader = Reader_init(bufferRA, proc);
 
     if (reader == NULL) {
         free(tracker);
-        Buffer_free(buffer_reader);
+        Buffer_destroy(bufferRA);
         return NULL;
     }
 
-    Analyzer* analyzer = Analyzer_init(buffer_reader);
+    Analyzer* analyzer = Analyzer_init(bufferRA, proc);
 
     if (analyzer == NULL) {
         free(tracker);
-        Buffer_free(buffer_reader);
-        Reader_free(reader);
+        Buffer_destroy(bufferRA);
+        Reader_destroy(reader);
         return NULL;
     }
 
     *tracker = (Tracker) {
         .reader = reader,
-        .buffer_reader = buffer_reader,
+        .bufferRA = bufferRA,
         .analyzer = analyzer,
         .status = ATOMIC_VAR_INIT(CREATED)
     };
 
     printf("[TRACKER]: INIT FINISHED\n");
+
     return tracker;
 }
 
@@ -87,39 +91,36 @@ Tracker* Tracker_init(
     PURPOSE: start of whole Tracker 'object''s thread work
     RETURN: nothing
 */
-void Tracker_start(
+int Tracker_start(
     Tracker* tracker
 ) {
     printf("[TRACKER]: START STARTED\n");
-    if (tracker == NULL) { return; }
+
+    if (tracker == NULL) { return ERR_PARAMS; }
+    if (tracker -> status != CREATED) { return ERR_PARAMS; }
 
     tracker -> status = RUNNING;
 
-    Reader_start(tracker -> reader, &(tracker -> status));
-    Analyzer_start(tracker -> analyzer, &(tracker -> status));
+    if (Reader_start(tracker -> reader, &(tracker -> status)) != SUCCESS) {
+        Tracker_destroy(tracker);
+        return ERR_RUN;
+    }
 
-    Tracker_free(tracker);
+    if (Analyzer_start(tracker -> analyzer, &(tracker -> status)) != SUCCESS) {
+        Tracker_destroy(tracker);
+        return ERR_RUN;
+    }
+
+    if (Reader_join(tracker -> reader)) {
+        Tracker_destroy(tracker);
+        return ERR_JOIN;
+    }
+
+    Tracker_destroy(tracker);
+
     printf("[TRACKER]: START FINISHED\n");
-}
 
-/*
-    METHOD: Tracker_free
-    PURPOSE: frees reserved memory for a given Tracker 'object' and its nested 'objects'
-    RETURN: nothing
-*/
-void Tracker_free(
-    Tracker* tracker
-) {
-    printf("[TRACKER]: FREE STARTED\n");
-    if (tracker == NULL) { return; }
-    
-    Buffer_free(tracker -> buffer_reader);
-    Reader_free(tracker -> reader);
-    Analyzer_free(tracker -> analyzer);
-    tracker -> status = 0;
-
-    free(tracker);
-    printf("[TRACKER]: FREE FINISHED\n");
+    return SUCCESS;
 }
 
 /*
@@ -127,13 +128,42 @@ void Tracker_free(
     PURPOSE: sets status on a given tracker to a TERMINATED status if possible
     RETURN: nothing
 */
-void Tracker_terminate(
-    Tracker* tracker
+int Tracker_terminate(
+    Tracker* const tracker
 ) {
     printf("[TRACKER]: TERMINATE STARTED\n");
-    if (tracker == NULL) { return; }
-    if (tracker -> status == TERMINATED) { return; }
+
+    if (tracker == NULL) { return ERR_PARAMS; }
+    if (tracker -> status == TERMINATED) { return ERR_PARAMS; }
+
+    Reader_destroy(tracker -> reader);
 
     tracker -> status = TERMINATED;
+
     printf("[TRACKER]: TERMINATE FINISHED\n");
+
+    return SUCCESS;
+}
+
+/*
+    METHOD: Tracker_destroy
+    PURPOSE: frees reserved memory for a given Tracker 'object' and its nested 'objects'
+    RETURN: nothing
+*/
+void Tracker_destroy(
+    Tracker* tracker
+) {
+    printf("[TRACKER]: FREE STARTED\n");
+
+    if (tracker == NULL) { return; }
+    
+    Buffer_destroy(tracker -> bufferRA);
+    Reader_destroy(tracker -> reader);
+    Analyzer_destroy(tracker -> analyzer);
+
+    tracker -> status = 0;
+
+    free(tracker);
+
+    printf("[TRACKER]: FREE FINISHED\n");
 }

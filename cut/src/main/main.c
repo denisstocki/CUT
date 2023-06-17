@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <signal.h>
 #include "../tracker/tracker.h"
-#include "../logger/logger.h"
+#include "../enums/enums.h"
 
 void handle_sigterm(int signum);
 
@@ -48,7 +48,9 @@ int main(
     signal(SIGINT, handle_sigterm);
     signal(SIGTERM, handle_sigterm);
 
-    Tracker_start(tracker);
+    if (Tracker_start(tracker) != SUCCESS) {
+        return -1;
+    }
     
     return 0;
 }
