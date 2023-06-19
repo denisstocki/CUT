@@ -10,7 +10,6 @@
 #include <stdint.h>
 
 typedef struct CoreStats {
-    char* name;
     int user;
     int nice;
     int system;

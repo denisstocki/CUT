@@ -10,6 +10,7 @@
 #include <time.h>       
 #include <sys/time.h>   
 #include "../buffer/buffer.h"
+#include "../enums/enums.h"
 
 #define CAPACITY 32
 
@@ -32,8 +33,7 @@ struct buffer {
 Buffer* Buffer_init(
     void
 ) {
-    printf("[BUFFER]: INIT STARTED\n");
-    Buffer* buffer = malloc(sizeof(Buffer) + sizeof(ProcessorStats) * CAPACITY);
+    Buffer* buffer = (Buffer*) malloc(sizeof(Buffer));
 
     if (buffer == NULL) { return NULL; }
 
@@ -46,7 +46,6 @@ Buffer* Buffer_init(
         .count = 0,
         .elements = {0}
     };
-    printf("[BUFFER]: INIT FINISHED\n");
     return buffer;
 }
 
@@ -58,7 +57,6 @@ Buffer* Buffer_init(
 bool Buffer_isEmpty(
     Buffer* buffer
 ) {
-    printf("[BUFFER]: ISEMPTY STARTED\n");
     if (buffer == NULL) { return false; }
 
     if (buffer -> count == 0) { return true; }
@@ -68,7 +66,6 @@ bool Buffer_isEmpty(
 bool Buffer_isFull(
     Buffer* buffer
 ) {
-    printf("[BUFFER]: ISFULL STARTED\n");
     if (buffer == NULL) { return false; }
 
     if (buffer -> count == CAPACITY) { return true; }
@@ -79,8 +76,7 @@ int Buffer_push(
     Buffer* buffer, 
     ProcessorStats* element
 ) {
-    printf("[BUFFER]: PUSH STARTED\n");
-    if (buffer == NULL || element == NULL) { return -1; }
+    if (buffer == NULL || element == NULL) { return ERR_PARAMS; }
 
     pthread_mutex_lock(&buffer->mutex);
 
@@ -88,8 +84,10 @@ int Buffer_push(
         pthread_cond_wait(&(buffer -> can_produce), &(buffer -> mutex));
     }
 
+    ProcessorStats* ptr = &(buffer -> elements[buffer -> head * sizeof(ProcessorStats)]);
+
     memcpy(
-        &(buffer -> elements[buffer -> head * sizeof(ProcessorStats)]), 
+        ptr, 
         element, 
         sizeof(ProcessorStats)
     );
@@ -99,16 +97,14 @@ int Buffer_push(
 
     pthread_cond_signal(&(buffer -> can_consume));
     pthread_mutex_unlock(&(buffer -> mutex));
-    printf("[BUFFER]: PUSH FINISHED\n");
-    return 1;
+    return SUCCESS;
 }
 
 int Buffer_pop(
     Buffer* buffer, 
     ProcessorStats* element
 ) {
-    printf("[BUFFER]: POP STARTED\n");
-    if (buffer == NULL || element == NULL) { return -1; }
+    if (buffer == NULL || element == NULL) { return ERR_PARAMS; }
 
     pthread_mutex_lock(&(buffer -> mutex));
 
@@ -116,9 +112,11 @@ int Buffer_pop(
         pthread_cond_wait(&(buffer -> can_consume), &(buffer -> mutex));
     }
 
+    ProcessorStats* ptr = &(buffer -> elements[buffer -> tail * sizeof(ProcessorStats)]);
+
     memcpy(
-        &(buffer -> elements[buffer -> tail * sizeof(ProcessorStats)]), 
-        element, 
+        element,
+        ptr,  
         sizeof(ProcessorStats)
     );
 
@@ -127,24 +125,17 @@ int Buffer_pop(
 
     pthread_cond_signal(&(buffer -> can_produce));
     pthread_mutex_unlock(&(buffer -> mutex));
-    printf("[BUFFER]: POP FINISHED\n");
-    return 1;
+    return SUCCESS;
 }
 
 void Buffer_free(
     Buffer* buffer
 ) {
-    printf("[BUFFER]: FREE STARTED\n");
     if (buffer == NULL) { return; }
 
+    pthread_mutex_destroy(&(buffer -> mutex));
     pthread_cond_destroy(&(buffer -> can_produce));
     pthread_cond_destroy(&(buffer -> can_consume));
-    pthread_mutex_destroy(&(buffer -> mutex));
-
-    for (size_t i = 0; i < CAPACITY; i++) {
-        free(buffer -> elements[i].cores);  
-    }
 
     free(buffer);
-    printf("[BUFFER]: FREE FINISHED\n");
 }

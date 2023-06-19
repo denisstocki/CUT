@@ -26,6 +26,7 @@ struct analyzer {
     long* cores_idle_prev;
     long cpu_total_prev;
     long cpu_idle_prev;
+    long proc;
 };
 
 // STRUCTURE FOR HOLDING PARAMS PASSED TO READER THREAD FUNCTION
@@ -59,7 +60,8 @@ Analyzer* Analyzer_init(
         .cores_total_prev = NULL,
         .cores_idle_prev = NULL,
         .cpu_total_prev = 0,
-        .cpu_idle_prev = 0
+        .cpu_idle_prev = 0,
+        .proc = proc
     };
 
     printf("[ANALYZER]: INIT FINISHED\n");
@@ -132,22 +134,24 @@ static void* Analyzer_threadf(
     printf("[ANALYZER]: THREAD FUNCTION STARTED\n");
 
     ThreadParams* params = (ThreadParams*)args;
-    ProcessorStats stats;
+    ProcessorStats* stats = malloc(sizeof(ProcessorStats) + sizeof(CoreStats) * (unsigned long) params -> analyzer -> proc);
     struct timespec sleepTime;
-    printf("STATUSIK: %d\n", *(params -> status));
+
+    if (stats == NULL) {
+        pthread_exit(NULL);
+    } 
+
     while (*(params -> status) == RUNNING) {
-        printf("CO SIE DZIEJE CHUI\n");
-        if (Buffer_pop(params -> analyzer -> buffer, &stats) != SUCCESS) {
-            printf("NO ZJEBAloSIE\n");
+        if (Buffer_pop(params -> analyzer -> buffer, stats) != SUCCESS) {
+            free(stats);
             break;
         }
         
-        if (Analyzer_analyze(params -> analyzer, &stats) != SUCCESS) {
-            break;
+        if (Analyzer_analyze(params -> analyzer, stats) == SUCCESS) {
+            printf("[PUSH]\n");
         }
-            printf("SIEMA2\n");
-        
-        free(stats.cores);
+
+        free(stats -> cores);
         
         sleepTime.tv_sec = 1;
         sleepTime.tv_nsec = 0;
@@ -156,6 +160,9 @@ static void* Analyzer_threadf(
     }
 
     printf("[ANALYZER]: THREAD FUNTION FINISHED\n");
+
+    free(params);
+    free(stats);
 
     pthread_exit(NULL);
 }
@@ -169,9 +176,13 @@ static int Analyzer_analyze(
     Analyzer* analyzer,
     ProcessorStats* processorStats
 ) {
+    printf("[ANALYZER]: ANALYZE STARTED\n");
+
     if (processorStats == NULL || analyzer == NULL) { return ERR_PARAMS; }
+
+    printf("[STATS]: %d\n", processorStats -> average.user);
     
-    printf("[SUCCESS]\n");
+    printf("[ANALYZER]: ANALYZE FINISHED\n");
 
     return SUCCESS;
 }
@@ -191,7 +202,11 @@ void Analyzer_destroy(
     
     analyzer -> cpu_idle_prev = 0;
     analyzer -> cpu_total_prev = 0;
+    analyzer -> proc = 0;
     analyzer -> prev_analyzed = false;
+
+    free(analyzer -> cores_total_prev);
+    free(analyzer -> cores_idle_prev);
 
     free(analyzer);
 

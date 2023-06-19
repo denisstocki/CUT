@@ -105,22 +105,22 @@ int Tracker_start(
         Tracker_destroy(tracker);
         return ERR_RUN;
     }
-    // printf("[STATUS]: %d\n", tracker -> status);
-    // if (Analyzer_start(tracker -> analyzer, &(tracker -> status)) != SUCCESS) {
-    //     Tracker_destroy(tracker);
-    //     return ERR_RUN;
-    // }
-    printf("[STATUS]: %d\n", tracker -> status);
+
+    if (Analyzer_start(tracker -> analyzer, &(tracker -> status)) != SUCCESS) {
+        Tracker_destroy(tracker);
+        return ERR_RUN;
+    }
+
     if (Reader_join(tracker -> reader)) {
         Tracker_destroy(tracker);
         return ERR_JOIN;
     }
-    // printf("[STATUS]: %d\n", tracker -> status);
-    // if (Analyzer_join(tracker -> analyzer)) {
-    //     Tracker_destroy(tracker);
-    //     return ERR_JOIN;
-    // }
-    printf("[STATUS]: %d\n", tracker -> status);
+
+    if (Analyzer_join(tracker -> analyzer)) {
+        Tracker_destroy(tracker);
+        return ERR_JOIN;
+    }
+
     Tracker_destroy(tracker);
 
     printf("[TRACKER]: START FINISHED\n");
@@ -141,8 +141,6 @@ int Tracker_terminate(
     if (tracker == NULL) { return ERR_PARAMS; }
     if (tracker -> status == TERMINATED) { return ERR_PARAMS; }
 
-    Reader_destroy(tracker -> reader);
-
     tracker -> status = TERMINATED;
 
     printf("[TRACKER]: TERMINATE FINISHED\n");
@@ -161,10 +159,17 @@ void Tracker_destroy(
     printf("[TRACKER]: FREE STARTED\n");
 
     if (tracker == NULL) { return; }
+
+    ProcessorStats trasher1;
     
-    Buffer_free(tracker -> bufferRA);
+    while(!Buffer_isEmpty(tracker -> bufferRA)) {
+      Buffer_pop(tracker -> bufferRA, &trasher1);
+      free(trasher1.cores);
+    }
+    
     Reader_destroy(tracker -> reader);
     Analyzer_destroy(tracker -> analyzer);
+    Buffer_free(tracker -> bufferRA);
 
     tracker -> status = 0;
 

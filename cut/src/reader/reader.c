@@ -12,7 +12,7 @@
 #include "../enums/enums.h"
 
 // PATH FOR FILE THAT READER WILL RECEIVE DATA FROM
-#define PATH "/proc/stat"
+#define PATH "/home/denis/CUT/f.txt"
 
 // PROTOTYPE FUNCTIONS FOR INSIDE WORLD
 int Reader_read(ProcessorStats* const, const long);
@@ -130,17 +130,12 @@ static void* Reader_threadf(
     ProcessorStats stats;
     struct timespec sleepTime;
 
-    printf("STATUSIK: %d\n", *(params -> status));
-
     while (*(params -> status) == RUNNING) {
         if (Reader_read(&stats, params -> reader -> proc) != SUCCESS) {
-            printf("TUATA1\n");
-            free(stats.cores);
             break;
         }
         
         if (Buffer_push(params -> reader -> buffer, &stats) != SUCCESS) {
-            printf("TUATA2\n");
             free(stats.cores);
             break;
         }
@@ -151,7 +146,9 @@ static void* Reader_threadf(
         nanosleep(&sleepTime, NULL);
     }
 
-    printf("[READER]: THREAD FUNTION FINISHED\n");
+    printf("[READER]: THREAD FUNCTION FINISHED\n");
+
+    free(params);
 
     pthread_exit(NULL);
 }
@@ -175,31 +172,21 @@ int Reader_read(
         return ERR_FILE_OPEN; 
     }
 
-    char line[256];
-
-    if (fgets(line, sizeof(line), file) == NULL) {
-        fclose(file);
-        return ERR_FILE_READ; 
+    if (fscanf(
+            file, 
+            "cpu %d %d %d %d %d %d %d %d %*d %*d\n",
+            &(processorStats -> average.user), 
+            &(processorStats -> average.nice), 
+            &(processorStats -> average.system),
+            &(processorStats -> average.idle), 
+            &(processorStats -> average.iowait), 
+            &(processorStats -> average.irq), 
+            &(processorStats -> average.sortirq),
+            &(processorStats -> average.steal)
+        ) != 8
+    ) {
+        return ERR_FILE_READ;
     }
-printf("%s\n", line);
-    printf("%d\n", sscanf(
-        line, 
-        "%s %d %d %d %d %d %d %d %d",
-        processorStats -> average.name,
-        &(processorStats -> average.user),
-        &(processorStats -> average.nice),
-        &(processorStats -> average.system),
-        &(processorStats -> average.idle),
-        &(processorStats -> average.iowait),
-        &(processorStats -> average.irq),
-        &(processorStats -> average.sortirq),
-        &(processorStats -> average.steal)
-    ));
-
-    printf("%s\n", processorStats -> average.name);
-    printf("%d\n", processorStats -> average.user);
-
-    printf("%s\n", line);
 
     processorStats -> cores = (CoreStats*) malloc(sizeof(CoreStats) * (unsigned long) proc);
 
@@ -208,31 +195,28 @@ printf("%s\n", line);
         return ERR_ALLOC; 
     }
 
-    CoreStats* coreStats;
     int coreCount = 0;
 
-    while (coreCount++ < proc) {
-        if (fgets(line, sizeof(line), file) == NULL) {
+    while (coreCount < proc) {
+        if (fscanf(
+                file, 
+                "cpu%*d %d %d %d %d %d %d %d %d %*d %*d\n",
+                &(processorStats -> cores[coreCount].user), 
+                &(processorStats -> cores[coreCount].nice), 
+                &(processorStats -> cores[coreCount].system),
+                &(processorStats -> cores[coreCount].idle), 
+                &(processorStats -> cores[coreCount].iowait), 
+                &(processorStats -> cores[coreCount].irq), 
+                &(processorStats -> cores[coreCount].sortirq),
+                &(processorStats -> cores[coreCount].steal)
+            ) != 8
+        ) {
             fclose(file);
             free(processorStats -> cores);
             return ERR_FILE_READ;
-        } 
-        
-        coreStats = &(processorStats -> cores[coreCount]);
-        printf("slifjalef\n");
-        printf("%d\n", sscanf(
-            line, 
-            "%s %d %d %d %d %d %d %d %d",
-            coreStats -> name,
-            &(coreStats -> user),
-            &(coreStats -> nice),
-            &(coreStats -> system),
-            &(coreStats -> idle),
-            &(coreStats -> iowait),
-            &(coreStats -> irq),
-            &(coreStats -> sortirq),
-            &(coreStats -> steal)
-        ));
+        }
+
+        coreCount++;
     }
 
     fclose(file);
