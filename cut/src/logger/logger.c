@@ -46,6 +46,8 @@ static Logger* Logger_instance(
         if (logger.file == NULL) { return NULL; }
         
         initialized = true;
+
+        Logger_log("LOGGER", "LOGGINING STARTED");
     }
 
     return &logger;
@@ -83,6 +85,7 @@ int Logger_start(
     
     Logger* logger = Logger_instance();
     ThreadParams* params = (ThreadParams*)malloc(sizeof(ThreadParams));
+
 
     *params = (ThreadParams) {
         .status = status
@@ -135,7 +138,7 @@ static void* Logger_threadf(void* arg) {
         sleepTime.tv_nsec = 0;
         nanosleep(&sleepTime, NULL);
     }
-
+    
     free(text);
     free(params);
 

@@ -112,8 +112,6 @@ Tracker* Tracker_init(
         .status = ATOMIC_VAR_INIT(CREATED)
     };
 
-    printf("[TRACKER]: INIT FINISHED\n");
-
     return tracker;
 }
 
@@ -128,51 +126,76 @@ int Tracker_start(
     if (tracker == NULL) { return ERR_PARAMS; }
     if (tracker -> status != CREATED) { return ERR_PARAMS; }
 
+    Logger_log("TRACKER", "START STARTING");
+
     tracker -> status = RUNNING;
+
+    Logger_log("TRACKER", "STARTING LOGGER");
 
     if (Logger_start(&(tracker -> status)) != SUCCESS) {
         Tracker_destroy(tracker);
         return ERR_RUN;
     }
 
+    Logger_log("TRACKER", "STARTING READER");
+
     if (Reader_start(tracker -> reader, &(tracker -> status)) != SUCCESS) {
+        Logger_log("TRACKER", "ERROR WHEN RUNNING READER");
         Tracker_destroy(tracker);
         return ERR_RUN;
     }
+
+    Logger_log("TRACKER", "STARTING ANALYZER");
 
     if (Analyzer_start(tracker -> analyzer, &(tracker -> status)) != SUCCESS) {
+        Logger_log("TRACKER", "ERROR WHEN RUNNING ANALYZER");
         Tracker_destroy(tracker);
         return ERR_RUN;
     }
+
+    Logger_log("TRACKER", "STARTING PRINTER");
 
     if (Printer_start(tracker -> printer, &(tracker -> status)) != SUCCESS) {
+        Logger_log("TRACKER", "ERROR WHEN RUNNING PRINTER");
         Tracker_destroy(tracker);
         return ERR_RUN;
     }
 
+    Logger_log("TRACKER", "JOINING READER");
+
     if (Reader_join(tracker -> reader)) {
+        Logger_log("TRACKER", "ERROR WHEN JOINING READER");
         Tracker_destroy(tracker);
         return ERR_JOIN;
     }
+
+    Logger_log("TRACKER", "JOINING ANALYZER");
 
     if (Analyzer_join(tracker -> analyzer)) {
+        Logger_log("TRACKER", "ERROR WHEN JOINING ANALYZER");
         Tracker_destroy(tracker);
         return ERR_JOIN;
     }
+
+    Logger_log("TRACKER", "JOINING PRINTER");
 
     if (Printer_join(tracker -> printer)) {
+        Logger_log("TRACKER", "ERROR WHEN JOINING PRINTER");
         Tracker_destroy(tracker);
         return ERR_JOIN;
     }
 
+    Logger_log("TRACKER", "JOINING LOGGER");
+
     if (Logger_join()) {
+        Logger_log("TRACKER", "ERROR WHEN JOINING LOGGER");
         Tracker_destroy(tracker);
         return ERR_JOIN;
     }
 
     Tracker_destroy(tracker);
 
-    printf("[TRACKER]: START FINISHED\n");
+    Logger_log("TRACKER", "START FINISHED WITH SUCCESS");
 
     return SUCCESS;
 }
@@ -185,14 +208,14 @@ int Tracker_start(
 int Tracker_terminate(
     Tracker* const tracker
 ) {
-    printf("[TRACKER]: TERMINATE STARTED\n");
+    Logger_log("TRACKER", "TERMINATE STARTED");
 
     if (tracker == NULL) { return ERR_PARAMS; }
     if (tracker -> status == TERMINATED) { return ERR_PARAMS; }
 
     tracker -> status = TERMINATED;
 
-    printf("[TRACKER]: TERMINATE FINISHED\n");
+    Logger_log("TRACKER", "TERMINATE FINISHED");
 
     return SUCCESS;
 }
@@ -205,17 +228,21 @@ int Tracker_terminate(
 void Tracker_destroy(
     Tracker* tracker
 ) {
-    printf("[TRACKER]: FREE STARTED\n");
+    printf("[TRACKER]: DESTROY STARTED\n");
 
     if (tracker == NULL) { return; }
 
     ProcessorStats trasher1;
     ConvertedStats trasher2;
     
+    printf("[TRACKER]: DESTROING BUFFER R-A INCLUDE\n");
+
     while(!Buffer_isEmpty(tracker -> bufferRA)) {
         Buffer_pop(tracker -> bufferRA, &trasher1);
         free(trasher1.cores);
     }
+
+    printf("[TRACKER]: DESTROING BUFFER A-P INCLUDE\n");
 
     while(!Buffer_isEmpty(tracker -> bufferAP)) {
         Buffer_pop(tracker -> bufferAP, &trasher2);
@@ -225,6 +252,7 @@ void Tracker_destroy(
     Reader_destroy(tracker -> reader);
     Analyzer_destroy(tracker -> analyzer);
     Printer_destroy(tracker -> printer);
+    Logger_destroy();
     Buffer_free(tracker -> bufferRA);
     Buffer_free(tracker -> bufferAP);
 
@@ -232,7 +260,5 @@ void Tracker_destroy(
 
     free(tracker);
 
-    printf("[TRACKER]: FREE FINISHED\n");
-
-    Logger_destroy();
+    printf("[TRACKER]: DESTROY FINISHED\n");
 }
