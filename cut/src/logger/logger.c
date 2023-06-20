@@ -54,7 +54,7 @@ static Logger* Logger_instance(
 }
 
 int Logger_init() {
-    if (initialized) { return ERR_CREATE; }
+    if (initialized) { return ERR_INIT; }
     
     Logger* logger = Logger_instance();
 

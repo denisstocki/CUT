@@ -7,8 +7,7 @@
 #ifndef STATS_H
 #define STATS_H
 
-#include <stdint.h>
-
+// STRUCTURE FOR HOLDING CORESTATS
 typedef struct CoreStats {
     int user;
     int nice;
@@ -20,13 +19,15 @@ typedef struct CoreStats {
     int steal;
 } CoreStats;
 
+// STRUCTURE FOR HOLDING PROCESSORSTATS
 typedef struct ProcessorStats {
-    CoreStats average;
     CoreStats* cores;
+    CoreStats average;
     int count;
     char padding[4];
 } ProcessorStats;
 
+// STRUCTURE FOR HOLDING CONVERTEDSTATS
 typedef struct ConvertedStats {
     float* percentages;
     float average_percentage;

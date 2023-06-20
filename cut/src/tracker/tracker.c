@@ -4,27 +4,31 @@
     PURPOSE: implementation of tracker module
 */
 
-#include <stdio.h>
+// INCLUDES OF OUTSIDE LIBRARIES
+#include <stdatomic.h>  
+#include <pthread.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <pthread.h>
 #include <signal.h>
+#include <stdio.h>
 #include <time.h>
-#include <stdatomic.h>  
-#include "tracker.h"
+
+// INCLUDES OF INSIDE LIBRARIES
 #include "../analyzer/analyzer.h"
 #include "../printer/printer.h"
-#include "../reader/reader.h"
-#include "../logger/logger.h"
 #include "../buffer/buffer.h"
+#include "../logger/logger.h"
+#include "../reader/reader.h"
 #include "../enums/enums.h"
+#include "tracker.h"
 
 // STRUCTURE FOR HOLDING TRACKER OBJECT
 struct tracker {
-    Reader* reader;
     Buffer* bufferRA;
-    Analyzer* analyzer;
     Buffer* bufferAP;
+    Buffer* bufferL;
+    Reader* reader;
+    Analyzer* analyzer;
     Printer* printer;
     volatile sig_atomic_t status;
     char padding[4];
@@ -32,6 +36,7 @@ struct tracker {
 
 /*
     METHOD: Tracker_init
+    ARGUMENTS: none
     PURPOSE: creation of Tracker 'object'
     RETURN: Tracker 'object' or NULL in 
         case creation was not possible 
@@ -39,11 +44,15 @@ struct tracker {
 Tracker* Tracker_init(
     void
 ) {
-    Tracker* tracker = (Tracker*) malloc(sizeof(Tracker));
+    Tracker* tracker;
+    Buffer* bufferRA;
+    Buffer* bufferAP;
+    Reader* reader;
 
-    if(Logger_init() == ERR_CREATE) { return NULL; }
+    tracker = (Tracker*) malloc(sizeof(Tracker));
 
     if (tracker == NULL) { return NULL; }
+    if (Logger_init() == ERR_INIT) { return NULL; }
 
     long proc = sysconf(_SC_NPROCESSORS_ONLN);
     
@@ -53,7 +62,7 @@ Tracker* Tracker_init(
         return NULL;
     }
 
-    Buffer* bufferRA = Buffer_init(sizeof(ProcessorStats) + sizeof(CoreStats) * (unsigned long) proc, 32);
+    bufferRA = Buffer_init(sizeof(ProcessorStats) + sizeof(CoreStats) * (unsigned long) proc, 32);
 
     if (bufferRA == NULL) { 
         free(tracker);
@@ -61,7 +70,7 @@ Tracker* Tracker_init(
         return NULL; 
     }
     
-    Reader* reader = Reader_init(bufferRA, proc);
+    reader = Reader_init(bufferRA, proc);
 
     if (reader == NULL) {
         free(tracker);
@@ -70,7 +79,7 @@ Tracker* Tracker_init(
         return NULL;
     }
 
-    Buffer* bufferAP = Buffer_init(sizeof(ConvertedStats) + sizeof(float) * (unsigned long) proc, 32);
+    bufferAP = Buffer_init(sizeof(ConvertedStats) + sizeof(float) * (unsigned long) proc, 32);
 
     if (bufferAP == NULL) { 
         free(bufferRA);

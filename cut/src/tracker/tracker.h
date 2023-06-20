@@ -7,16 +7,13 @@
 #ifndef TRACKER_H
 #define TRACKER_H
 
-// INSIDE LIBRARIES
-#include "../logger/logger.h"
-
 // ENCAPSULATION ON TRACKER OBJECT
 typedef struct tracker Tracker;
 
-// PROTOTYPE FUNCTIONS FOR OUTSIDE WORLD
+// DECLARATIONS OF OUTSIDE PROTOTYPES
 Tracker* Tracker_init(void);
-int Tracker_start(Tracker* const tracker);
-int Tracker_terminate(Tracker* const tracker);
-void Tracker_destroy(Tracker* const tracker);
+int Tracker_start(Tracker* const);
+int Tracker_terminate(Tracker* const);
+void Tracker_destroy(Tracker* const);
 
 #endif 

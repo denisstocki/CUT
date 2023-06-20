@@ -24,6 +24,7 @@ enum {
     ERR_RUN,
     ERR_PUSH,
     SUCCESS,
+    ERR_INIT,
     INITIALIZED,
     ANALYZED
 };
