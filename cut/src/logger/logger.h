@@ -7,12 +7,12 @@
 #ifndef LOGGER_H
 #define LOGGER_H
 
-// Usage of pseudo objective 
-// encapsulation on struct logger.
-typedef struct logger Logger;
+#include <signal.h>
 
-Logger* Logger_init(char* path);
-void Logger_log(Logger* logger, char* name, char* info);
-void Logger_free(Logger* logger);
+int Logger_init(void);
+int Logger_join(void);
+int Logger_start(volatile sig_atomic_t*);
+int Logger_log(char* name, char* info);
+void Logger_destroy(void);
 
 #endif 

@@ -7,70 +7,138 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <stdbool.h>
+#include <string.h>
+#include "../buffer/buffer.h"
+#include "../enums/enums.h"
 #include "logger.h"
 
-#define MAX_ENTRIES 32
+#define PATH "log.txt"
 
-struct logger {
-    pthread_mutex_t mutex;
-    pthread_cond_t cond;
-    char* entries[MAX_ENTRIES];
-    int count;
-    int head;
-    int tail;
-    char padding[4];
+typedef struct {
+    pthread_t thread;
+    Buffer* buffer;
     FILE* file;
-};
+} Logger;
 
-/*
-    METHOD: Logger_init
-    PURPOSE: creation of Logger 'object'
-    RETURN: Logger 'object' or NULL in 
-        case creation was not possible 
-*/
-Logger* Logger_init(
-    char* path
+typedef struct {
+    volatile sig_atomic_t* status;
+} ThreadParams;
+
+static bool started = false;
+static bool initialized = false;
+static bool joined = false;
+
+static void* Logger_threadf(void* arg);
+
+static Logger* Logger_instance(
+
 ) {
-    Logger* logger = (Logger*) malloc(sizeof(Logger));
-    logger -> count = 0;
-    logger -> tail = 0;
-    logger -> head = 0;
-    logger -> file = fopen(path, "w");
+    static Logger logger;
 
-    if (logger -> file == NULL) {
-       printf("[LOGGER]: COULD NOT CREATE FILE UNDER A GIVEN PATH\n");
-       return NULL;
-    } 
+    if (!initialized) {
+        logger.buffer = Buffer_init(sizeof(char) * 256, 100);
 
-    pthread_mutex_init(&(logger -> mutex), NULL);
-    pthread_cond_init(&(logger -> cond), NULL);
+        if (logger.buffer == NULL) { return NULL; }
 
-    return logger;
+        logger.file = fopen(PATH, "w");
+
+        if (logger.file == NULL) { return NULL; }
+        
+        initialized = true;
+    }
+
+    return &logger;
 }
 
-/*
-    METHOD: Logger_log
-    PURPOSE: sending a single log into the file under saved path
-    RETURN: nothing
-*/
-void Logger_log(
-    Logger* logger, 
-    char* name, 
-    char* info
-) {
-    fprintf(logger -> file, "[%s]: %s\n", name, info);
-    fflush(logger -> file);
+int Logger_init() {
+    if (initialized) { return ERR_CREATE; }
+    
+    Logger* logger = Logger_instance();
+
+    if (logger == NULL) { return ERR_ALLOC; }
+    
+    return SUCCESS;
 }
 
-/*
-    METHOD: Logger_free
-    PURPOSE: frees reserved memory for a given Logger 'object' and its nested 'objects'
-    RETURN: Logger 'object' or NULL in 
-        case creation was not possible 
-*/
-void Logger_free(
-    Logger* logger
-) {
-    logger -> file = NULL;
-    free(logger);
+int Logger_join() {
+    if (joined) { return ERR_JOIN; }
+
+    Logger* logger = Logger_instance();
+
+    if (pthread_join(logger -> thread, NULL) != 0) {
+        free(logger -> buffer);
+        return ERR_JOIN;
+    }
+
+    joined = true;
+
+    return SUCCESS;
 }
+
+int Logger_start(
+    volatile sig_atomic_t* status
+) {
+    if (started) { return ERR_RUN; }
+    
+    Logger* logger = Logger_instance();
+    ThreadParams* params = (ThreadParams*)malloc(sizeof(ThreadParams));
+
+    *params = (ThreadParams) {
+        .status = status
+    };
+
+    if (pthread_create(&(logger -> thread), NULL, Logger_threadf, (void*) params) != 0) {
+        Buffer_free(logger -> buffer);
+        return ERR_CREATE; 
+    }
+    
+    started = true;
+
+    return SUCCESS;
+}
+
+int Logger_log(char* name, char* info) {
+    Logger* logger = Logger_instance();
+    char message[256];
+
+    snprintf(message, sizeof(message), "[%s]: %s", name, info);
+
+    if (Buffer_push(logger -> buffer, message) != SUCCESS) {
+        return ERR_PUSH;
+    }
+
+    return SUCCESS;
+}
+
+void Logger_destroy() {
+    Logger* logger = Logger_instance();
+
+    fclose(logger -> file);
+}
+
+static void* Logger_threadf(void* arg) {
+    ThreadParams* params = (ThreadParams*) arg;
+    struct timespec sleepTime;
+    Logger* logger = Logger_instance();
+    char* text = malloc(sizeof(char) * 256);
+
+    while (*(params -> status) == RUNNING) {
+        if (Buffer_pop(logger -> buffer, text) != SUCCESS) {
+            break;
+        }
+
+        fprintf(logger -> file, "%s\n", text);
+        fflush(logger -> file);
+
+        sleepTime.tv_sec = 1;
+        sleepTime.tv_nsec = 0;
+        nanosleep(&sleepTime, NULL);
+    }
+
+    free(text);
+    free(params);
+
+    pthread_exit(NULL);
+}
+

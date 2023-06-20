@@ -12,8 +12,6 @@
 #include "../buffer/buffer.h"
 #include "../enums/enums.h"
 
-#define CAPACITY 32
-
 struct buffer {
     pthread_cond_t can_produce;
     pthread_cond_t can_consume;
@@ -21,7 +19,9 @@ struct buffer {
     size_t tail;
     size_t head;
     size_t count;
-    ProcessorStats elements[CAPACITY];   
+    size_t capacity;
+    size_t size;
+    uint8_t elements[];   
 };
 
 /*
@@ -31,9 +31,12 @@ struct buffer {
         case creation was not possible 
 */
 Buffer* Buffer_init(
-    void
+    size_t size,
+    size_t capacity
 ) {
-    Buffer* buffer = (Buffer*) malloc(sizeof(Buffer));
+    if (size <= 0 || capacity <= 0) { return NULL; }
+    
+    Buffer* buffer = (Buffer*) malloc(sizeof(Buffer) + (size * capacity));
 
     if (buffer == NULL) { return NULL; }
 
@@ -44,8 +47,10 @@ Buffer* Buffer_init(
         .tail = 0,
         .head = 0,
         .count = 0,
-        .elements = {0}
+        .capacity = capacity,
+        .size = size
     };
+
     return buffer;
 }
 
@@ -68,13 +73,13 @@ bool Buffer_isFull(
 ) {
     if (buffer == NULL) { return false; }
 
-    if (buffer -> count == CAPACITY) { return true; }
+    if (buffer -> count == buffer -> capacity) { return true; }
     else { return false; }
 }
 
 int Buffer_push(
     Buffer* buffer, 
-    ProcessorStats* element
+    void* element
 ) {
     if (buffer == NULL || element == NULL) { return ERR_PARAMS; }
 
@@ -84,16 +89,16 @@ int Buffer_push(
         pthread_cond_wait(&(buffer -> can_produce), &(buffer -> mutex));
     }
 
-    ProcessorStats* ptr = &(buffer -> elements[buffer -> head * sizeof(ProcessorStats)]);
+    uint8_t* ptr = &(buffer -> elements[buffer -> head * buffer -> size]);
 
     memcpy(
         ptr, 
         element, 
-        sizeof(ProcessorStats)
+        buffer -> size
     );
 
     buffer -> count++;
-    buffer -> head = (buffer -> head + 1) % CAPACITY;
+    buffer -> head = (buffer -> head + 1) % buffer -> capacity;
 
     pthread_cond_signal(&(buffer -> can_consume));
     pthread_mutex_unlock(&(buffer -> mutex));
@@ -102,7 +107,7 @@ int Buffer_push(
 
 int Buffer_pop(
     Buffer* buffer, 
-    ProcessorStats* element
+    void* element
 ) {
     if (buffer == NULL || element == NULL) { return ERR_PARAMS; }
 
@@ -112,19 +117,20 @@ int Buffer_pop(
         pthread_cond_wait(&(buffer -> can_consume), &(buffer -> mutex));
     }
 
-    ProcessorStats* ptr = &(buffer -> elements[buffer -> tail * sizeof(ProcessorStats)]);
+    uint8_t* ptr = &(buffer -> elements[buffer -> tail * buffer -> size]);
 
     memcpy(
         element,
         ptr,  
-        sizeof(ProcessorStats)
+        buffer -> size
     );
 
     buffer -> count--;
-    buffer -> tail = (buffer -> tail + 1) % CAPACITY;
+    buffer -> tail = (buffer -> tail + 1) % buffer -> capacity;
 
     pthread_cond_signal(&(buffer -> can_produce));
     pthread_mutex_unlock(&(buffer -> mutex));
+    
     return SUCCESS;
 }
 

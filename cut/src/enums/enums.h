@@ -22,7 +22,10 @@ enum {
     ERR_JOIN,
     ERR_READ,
     ERR_RUN,
-    SUCCESS
+    ERR_PUSH,
+    SUCCESS,
+    INITIALIZED,
+    ANALYZED
 };
 
 #endif 

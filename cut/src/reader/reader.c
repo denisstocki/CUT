@@ -12,7 +12,7 @@
 #include "../enums/enums.h"
 
 // PATH FOR FILE THAT READER WILL RECEIVE DATA FROM
-#define PATH "/home/denis/CUT/f.txt"
+#define PATH "/proc/stat"
 
 // PROTOTYPE FUNCTIONS FOR INSIDE WORLD
 int Reader_read(ProcessorStats* const, const long);
@@ -73,7 +73,7 @@ int Reader_start(
     Reader* const reader,
     volatile sig_atomic_t* status
 ) {
-    printf("[READER]: START STARTED\n");
+    Logger_log("READER", "START STARTED");
 
     if (
         reader == NULL ||
@@ -95,7 +95,7 @@ int Reader_start(
 
     reader -> thread_started = true;
 
-    printf("[READER]: START FINISHED\n");
+    Logger_log("READER", "START FINISHED");
 
     return SUCCESS;
 }
@@ -103,7 +103,7 @@ int Reader_start(
 int Reader_join(
     Reader* const reader
 ) {
-    printf("[READER]: JOIN STARTED\n");
+    Logger_log("READER", "JOIN STARTED");
 
     if (reader == NULL) { return ERR_PARAMS; }
     if (reader -> thread_started == false) { return ERR_PARAMS; }
@@ -111,7 +111,7 @@ int Reader_join(
         return ERR_JOIN;
     }
 
-    printf("[READER]: JOIN FINISHED\n");
+    Logger_log("READER", "JOIN FINISHED");
 
     return SUCCESS;
 }
@@ -124,7 +124,7 @@ int Reader_join(
 static void* Reader_threadf(
     void* const args
 ) {
-    printf("[READER]: THREAD FUNCTION STARTED\n");
+    Logger_log("READER", "THREAD FUNCTION STARTED");
 
     ThreadParams* params = (ThreadParams*) args;
     ProcessorStats stats;
@@ -146,7 +146,7 @@ static void* Reader_threadf(
         nanosleep(&sleepTime, NULL);
     }
 
-    printf("[READER]: THREAD FUNCTION FINISHED\n");
+    Logger_log("READER", "THREAD FUNCTION FINISHED");
 
     free(params);
 
@@ -162,7 +162,7 @@ int Reader_read(
     ProcessorStats* const processorStats,
     const long proc
 ) {
-    printf("[READER]: READ STARTED\n");
+    Logger_log("READER", "READ STARTED");
 
     if (processorStats == NULL || proc <= 0) { return ERR_PARAMS; }
     
@@ -223,7 +223,7 @@ int Reader_read(
 
     processorStats -> count = coreCount;
 
-    printf("[READER]: READ FINISHED\n");
+    Logger_log("READER", "READ FINISHED");
 
     return SUCCESS; 
 }

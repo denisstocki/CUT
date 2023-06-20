@@ -17,7 +17,7 @@
 typedef struct analyzer Analyzer;
 
 // PROTOTYPE FUNCTIONS FOR OUTSIDE WORLD
-Analyzer* Analyzer_init(Buffer* const, const long);
+Analyzer* Analyzer_init(Buffer* const, Buffer* const, const long);
 int Analyzer_start(Analyzer* const, volatile sig_atomic_t*);
 int Analyzer_join(Analyzer* const);
 void Analyzer_destroy(Analyzer* const);

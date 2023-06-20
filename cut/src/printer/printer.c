@@ -6,13 +6,28 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <pthread.h>
+#include <stdbool.h>
 #include "printer.h"
+#include "../enums/enums.h"
 
 struct printer {
-    Logger* logger;
-    int value;
-    char padding[4];
+    Buffer* bufferAP;
+    pthread_t thread;
+    long proc;
+    bool thread_started;
+    char padding[7];
 };
+
+// STRUCTURE FOR HOLDING PARAMS PASSED TO READER THREAD FUNCTION
+typedef struct ThreadParams {
+    Printer* printer;
+    volatile sig_atomic_t* status;
+} ThreadParams;
+
+static void* Printer_threadf(void* args);
+static void Printer_print(ConvertedStats*);
+static void Printer_toScreen(float);
 
 /*
     METHOD: Printer_init
@@ -21,13 +36,150 @@ struct printer {
         case creation was not possible 
 */
 Printer* Printer_init(
-    Logger* logger
+    Buffer* bufferAP,
+    long proc
 ) {
+    printf("[PRINTER]: INIT STARTED\n");
+
+    if (bufferAP == NULL || proc <= 0) { return NULL; }
+    
     Printer* printer = (Printer*) malloc(sizeof(Printer));
-    printer -> logger = logger;
-    printer -> value = 0;
+
+    if (printer == NULL) { return NULL; }
+    
+    *printer = (Printer) {
+        .bufferAP = bufferAP,
+        .proc = proc,
+        .thread_started = false
+    };
+
+    printf("[PRINTER]: INIT FINISHED\n");
 
     return printer;
+}
+
+int Printer_start(
+    Printer* const printer,
+    volatile sig_atomic_t* status
+) {
+    printf("[PRINTER]: START STARTED\n");
+
+    if (
+        printer == NULL ||
+        *status != RUNNING
+    ) { return ERR_PARAMS; }
+
+    ThreadParams* params = (ThreadParams*) malloc(sizeof(ThreadParams));
+
+    if (params == NULL) { return ERR_ALLOC; }
+
+    *params = (ThreadParams) {
+        .printer = printer,
+        .status = status
+    };
+
+    if (pthread_create(&(printer -> thread), NULL, Printer_threadf, (void*) params) != 0) {
+        return ERR_CREATE;
+    }
+
+    printer -> thread_started = true;
+
+    printf("[PRINTER]: START FINISHED\n");
+
+    return SUCCESS;
+}
+
+int Printer_join(
+    Printer* const printer
+) {
+    printf("[PRINTER]: JOIN STARTED\n");
+
+    if (printer == NULL) { return ERR_PARAMS; }
+    if (printer -> thread_started == false) { return ERR_PARAMS; }
+    if (pthread_join(printer -> thread, NULL) != 0) {
+        return ERR_JOIN;
+    }
+
+    printf("[PRINTER]: JOIN FINISHED\n");
+
+    return SUCCESS;
+}
+
+static void* Printer_threadf(
+    void* args
+) {
+    printf("[PRINTER]: THREAD FUNCTION STARTED\n");
+
+    ThreadParams* params = (ThreadParams*)args;
+    ConvertedStats* converted = malloc(sizeof(ConvertedStats) + sizeof(float) * (unsigned long) params -> printer -> proc);
+    struct timespec sleepTime;
+
+    if (converted == NULL) {
+        pthread_exit(NULL);
+    } 
+
+    while (*(params -> status) == RUNNING) {
+        if (Buffer_pop(params -> printer -> bufferAP, converted) != SUCCESS) {
+            free(converted);
+            break;
+        }
+
+        Printer_print(converted);
+        
+        free(converted -> percentages);
+        
+        sleepTime.tv_sec = 1;
+        sleepTime.tv_nsec = 0;
+
+        nanosleep(&sleepTime, NULL);
+    }
+
+    printf("[ANALYZER]: THREAD FUNCTION FINISHED\n");
+
+    free(params);
+    free(converted);
+
+    pthread_exit(NULL);
+}
+
+static void Printer_print(
+    ConvertedStats* convertedStats
+) {
+    if (convertedStats == NULL) { return; }
+    
+    printf("\033[H\033[J");
+
+    printf("### CPU ULTRA TRACKING ###\n");
+
+    printf("total: ");
+
+    Printer_toScreen(convertedStats -> average_percentage);
+
+    printf("\n");
+
+    for(int i = 0; i < convertedStats -> count; i++) {
+        printf("cpu %d: ", i);
+        Printer_toScreen(convertedStats -> percentages[i]);
+        printf("\n");
+    }
+
+    printf("\n");
+}
+
+static void Printer_toScreen(
+    float percentage
+) {
+    int progress = (int)(percentage / 10.0f);
+    
+    printf("[");
+
+    for(int i = 0; i < progress; i++)
+        printf("%s", "*");
+
+    for(int i = progress; i < 10; i++)
+        printf(" ");
+
+    printf("] %0.2f%%", (double)percentage);
 }
 
 /*
@@ -36,9 +188,14 @@ Printer* Printer_init(
     RETURN: Printer 'object' or NULL in 
         case creation was not possible 
 */
-void Printer_free(
+void Printer_destroy(
     Printer* printer
 ) {
-    printer -> value = 0;
+    printf("[PRINTER]: DESTROY STARTED\n");
+
+    if (printer == NULL) { return; }
+    
     free(printer);
+
+    printf("[PRINTER]: DESTROY FINISHED\n");
 }

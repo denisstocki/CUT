@@ -14,11 +14,11 @@
 
 typedef struct buffer Buffer;
 
-Buffer* Buffer_init(void);
+Buffer* Buffer_init(size_t size, size_t capacity);
 bool Buffer_isEmpty(Buffer*);
 bool Buffer_isFull(Buffer*);
-int Buffer_push(Buffer*, ProcessorStats*);
-int Buffer_pop(Buffer*, ProcessorStats*);
+int Buffer_push(Buffer*, void*);
+int Buffer_pop(Buffer*, void*);
 void Buffer_free(Buffer*);
 
 #endif 

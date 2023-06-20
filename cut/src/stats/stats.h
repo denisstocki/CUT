@@ -27,4 +27,10 @@ typedef struct ProcessorStats {
     char padding[4];
 } ProcessorStats;
 
+typedef struct ConvertedStats {
+    float* percentages;
+    float average_percentage;
+    int count;
+} ConvertedStats;
+
 #endif 

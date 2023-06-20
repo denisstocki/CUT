@@ -24,6 +24,8 @@ struct tracker {
     Reader* reader;
     Buffer* bufferRA;
     Analyzer* analyzer;
+    Buffer* bufferAP;
+    Printer* printer;
     volatile sig_atomic_t status;
     char padding[4];
 };
@@ -37,9 +39,9 @@ struct tracker {
 Tracker* Tracker_init(
     void
 ) {
-    printf("[TRACKER]: INIT STARTED\n");
-
     Tracker* tracker = (Tracker*) malloc(sizeof(Tracker));
+
+    if(Logger_init() == ERR_CREATE) { return NULL; }
 
     if (tracker == NULL) { return NULL; }
 
@@ -47,13 +49,15 @@ Tracker* Tracker_init(
     
     if (proc <= 0) {
         free(tracker);
+        Logger_destroy();
         return NULL;
     }
 
-    Buffer* bufferRA = Buffer_init();
+    Buffer* bufferRA = Buffer_init(sizeof(ProcessorStats) + sizeof(CoreStats) * (unsigned long) proc, 32);
 
     if (bufferRA == NULL) { 
         free(tracker);
+        Logger_destroy();
         return NULL; 
     }
     
@@ -62,22 +66,49 @@ Tracker* Tracker_init(
     if (reader == NULL) {
         free(tracker);
         Buffer_free(bufferRA);
+        Logger_destroy();
         return NULL;
     }
 
-    Analyzer* analyzer = Analyzer_init(bufferRA, proc);
+    Buffer* bufferAP = Buffer_init(sizeof(ConvertedStats) + sizeof(float) * (unsigned long) proc, 32);
+
+    if (bufferAP == NULL) { 
+        free(bufferRA);
+        free(reader);
+        free(tracker);
+        Logger_destroy();
+        return NULL; 
+    }
+
+    Analyzer* analyzer = Analyzer_init(bufferRA, bufferAP, proc);
 
     if (analyzer == NULL) {
         free(tracker);
         Buffer_free(bufferRA);
+        Buffer_free(bufferAP);
         Reader_destroy(reader);
+        Logger_destroy();
         return NULL;
     }
 
+    Printer* printer = Printer_init(bufferAP, proc);
+
+    if (printer == NULL) {
+        free(tracker);
+        Buffer_free(bufferRA);
+        Buffer_free(bufferAP);
+        Reader_destroy(reader);
+        Analyzer_destroy(analyzer);
+        Logger_destroy();
+        return NULL;
+    }
+    
     *tracker = (Tracker) {
         .reader = reader,
         .bufferRA = bufferRA,
         .analyzer = analyzer,
+        .bufferAP = bufferAP,
+        .printer = printer,
         .status = ATOMIC_VAR_INIT(CREATED)
     };
 
@@ -94,12 +125,15 @@ Tracker* Tracker_init(
 int Tracker_start(
     Tracker* tracker
 ) {
-    printf("[TRACKER]: START STARTED\n");
-
     if (tracker == NULL) { return ERR_PARAMS; }
     if (tracker -> status != CREATED) { return ERR_PARAMS; }
 
     tracker -> status = RUNNING;
+
+    if (Logger_start(&(tracker -> status)) != SUCCESS) {
+        Tracker_destroy(tracker);
+        return ERR_RUN;
+    }
 
     if (Reader_start(tracker -> reader, &(tracker -> status)) != SUCCESS) {
         Tracker_destroy(tracker);
@@ -111,12 +145,27 @@ int Tracker_start(
         return ERR_RUN;
     }
 
+    if (Printer_start(tracker -> printer, &(tracker -> status)) != SUCCESS) {
+        Tracker_destroy(tracker);
+        return ERR_RUN;
+    }
+
     if (Reader_join(tracker -> reader)) {
         Tracker_destroy(tracker);
         return ERR_JOIN;
     }
 
     if (Analyzer_join(tracker -> analyzer)) {
+        Tracker_destroy(tracker);
+        return ERR_JOIN;
+    }
+
+    if (Printer_join(tracker -> printer)) {
+        Tracker_destroy(tracker);
+        return ERR_JOIN;
+    }
+
+    if (Logger_join()) {
         Tracker_destroy(tracker);
         return ERR_JOIN;
     }
@@ -161,19 +210,29 @@ void Tracker_destroy(
     if (tracker == NULL) { return; }
 
     ProcessorStats trasher1;
+    ConvertedStats trasher2;
     
     while(!Buffer_isEmpty(tracker -> bufferRA)) {
-      Buffer_pop(tracker -> bufferRA, &trasher1);
-      free(trasher1.cores);
+        Buffer_pop(tracker -> bufferRA, &trasher1);
+        free(trasher1.cores);
+    }
+
+    while(!Buffer_isEmpty(tracker -> bufferAP)) {
+        Buffer_pop(tracker -> bufferAP, &trasher2);
+        free(trasher2.percentages);
     }
     
     Reader_destroy(tracker -> reader);
     Analyzer_destroy(tracker -> analyzer);
+    Printer_destroy(tracker -> printer);
     Buffer_free(tracker -> bufferRA);
+    Buffer_free(tracker -> bufferAP);
 
     tracker -> status = 0;
 
     free(tracker);
 
     printf("[TRACKER]: FREE FINISHED\n");
+
+    Logger_destroy();
 }

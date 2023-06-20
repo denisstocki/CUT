@@ -13,11 +13,13 @@
 
 // PROTOTYPE FUNCTIONS FOR INSIDE WORLD
 static void* Analyzer_threadf(void* args);
-static int Analyzer_analyze(Analyzer* analyzer, ProcessorStats*);
+static int Analyzer_analyze(Analyzer* analyzer, ProcessorStats*, ConvertedStats*);
+static float Analyzer_toPercent(CoreStats*, long*, long*);
 
 // STRUCTURE FOR HOLDING ANALYZER OBJECT
 struct analyzer {
-    Buffer* buffer;
+    Buffer* bufferRA;
+    Buffer* bufferAP;
     pthread_t thread;
     bool thread_started;
     bool prev_analyzed;
@@ -42,19 +44,27 @@ typedef struct ThreadParams {
         case creation was not possible 
 */
 Analyzer* Analyzer_init(
-    Buffer* buffer,
+    Buffer* bufferRA,
+    Buffer* bufferAP,
     long proc
 ) {
     printf("[ANALYZER]: INIT STARTED\n");
 
-    if (buffer == NULL || proc <= 0) { return NULL; }
+    if (
+        bufferRA == NULL || 
+        bufferAP == NULL ||
+        proc <= 0
+    ) { 
+        return NULL; 
+    }
     
     Analyzer* analyzer = (Analyzer*) malloc(sizeof(Analyzer));
 
     if (analyzer == NULL) { return NULL; }
     
     *analyzer = (Analyzer) {
-        .buffer = buffer,
+        .bufferRA = bufferRA,
+        .bufferAP = bufferAP,
         .thread_started = false,
         .prev_analyzed = false,
         .cores_total_prev = NULL,
@@ -135,6 +145,7 @@ static void* Analyzer_threadf(
 
     ThreadParams* params = (ThreadParams*)args;
     ProcessorStats* stats = malloc(sizeof(ProcessorStats) + sizeof(CoreStats) * (unsigned long) params -> analyzer -> proc);
+    ConvertedStats converted;
     struct timespec sleepTime;
 
     if (stats == NULL) {
@@ -142,13 +153,17 @@ static void* Analyzer_threadf(
     } 
 
     while (*(params -> status) == RUNNING) {
-        if (Buffer_pop(params -> analyzer -> buffer, stats) != SUCCESS) {
+        if (Buffer_pop(params -> analyzer -> bufferRA, stats) != SUCCESS) {
             free(stats);
             break;
         }
         
-        if (Analyzer_analyze(params -> analyzer, stats) == SUCCESS) {
-            printf("[PUSH]\n");
+        if (Analyzer_analyze(params -> analyzer, stats, &converted) == SUCCESS) {
+            if (Buffer_push(params -> analyzer -> bufferAP, &converted) != SUCCESS) {
+                free(stats -> cores);
+                free(converted.percentages);
+                break;
+            }
         }
 
         free(stats -> cores);
@@ -159,7 +174,7 @@ static void* Analyzer_threadf(
         nanosleep(&sleepTime, NULL);
     }
 
-    printf("[ANALYZER]: THREAD FUNTION FINISHED\n");
+    printf("[ANALYZER]: THREAD FUNCTION FINISHED\n");
 
     free(params);
     free(stats);
@@ -174,17 +189,126 @@ static void* Analyzer_threadf(
 */
 static int Analyzer_analyze(
     Analyzer* analyzer,
-    ProcessorStats* processorStats
+    ProcessorStats* processorStats,
+    ConvertedStats* convertedStats
 ) {
     printf("[ANALYZER]: ANALYZE STARTED\n");
 
-    if (processorStats == NULL || analyzer == NULL) { return ERR_PARAMS; }
+    if (
+        processorStats == NULL || 
+        analyzer == NULL || 
+        convertedStats == NULL
+    ) { 
+        return ERR_PARAMS; 
+    }
 
-    printf("[STATS]: %d\n", processorStats -> average.user);
+    if (!analyzer -> prev_analyzed) {
+        analyzer -> cores_total_prev = malloc(sizeof(long) * (unsigned long) analyzer -> proc);
+
+        if (analyzer -> cores_total_prev == NULL) { return ERR_ALLOC; }
+        
+        analyzer -> cores_idle_prev = malloc(sizeof(long) * (unsigned long) analyzer -> proc);
+
+        if (analyzer -> cores_idle_prev == NULL) {
+            free(analyzer -> cores_total_prev);
+            return ERR_ALLOC;
+        }
+
+        long idle = processorStats -> average.idle 
+            + processorStats -> average.iowait;
+
+        long non_idle = processorStats -> average.user 
+            + processorStats -> average.nice 
+            + processorStats -> average.system 
+            + processorStats -> average.irq 
+            + processorStats -> average.sortirq
+            + processorStats -> average.steal;
+
+        analyzer -> cpu_total_prev = idle + non_idle;
+        analyzer -> cpu_idle_prev = idle;
+
+        for(long i = 0; i < processorStats -> count; i++) {
+            idle = processorStats -> cores[i].idle 
+                + processorStats -> cores[i].iowait;
+
+            non_idle = processorStats -> cores[i].user 
+                + processorStats -> cores[i].nice 
+                + processorStats -> cores[i].system 
+                + processorStats -> cores[i].irq 
+                + processorStats -> cores[i].sortirq 
+                + processorStats -> cores[i].steal;
     
+            analyzer -> cores_total_prev[i] = idle + non_idle;
+            analyzer -> cores_idle_prev[i] = idle;
+        }
+
+        analyzer -> prev_analyzed = true;
+
+        convertedStats -> percentages = NULL;
+        convertedStats -> count = processorStats -> count;
+
+        return ANALYZED;
+    }
+    
+    convertedStats -> percentages = malloc(sizeof(float) * (unsigned long) processorStats -> count);
+    
+    if(convertedStats -> percentages == NULL) { return ERR_ALLOC; }
+
+    convertedStats -> count = processorStats -> count;
+    convertedStats -> average_percentage = Analyzer_toPercent(
+        &processorStats -> average, 
+        &analyzer -> cpu_total_prev, 
+        &analyzer -> cpu_idle_prev
+    );
+
+    for(uint8_t i = 0; i < processorStats -> count; i++) {
+        convertedStats -> percentages[i] = Analyzer_toPercent(
+            &(processorStats -> cores[i]), 
+            &(analyzer -> cores_total_prev[i]), 
+            &(analyzer -> cores_idle_prev[i])
+        );
+    }
+
     printf("[ANALYZER]: ANALYZE FINISHED\n");
 
     return SUCCESS;
+}
+
+static float Analyzer_toPercent(
+    CoreStats* stats, 
+    long* total_prev, 
+    long* idle_prev
+) {
+    printf("[ANALYZER]: toPercent started\n");
+    long idle = stats -> idle 
+        + stats -> iowait;
+
+    long non_idle = stats -> user 
+        + stats -> nice 
+        + stats -> system 
+        + stats -> irq 
+        + stats -> sortirq 
+        + stats -> steal;
+
+    long total = idle 
+        + non_idle 
+        - *total_prev;
+
+    long idled = idle 
+        - *idle_prev;
+
+    float percentage = 0.0f;
+
+    if(total != 0) { percentage = (float)(total - idled) / (float) total * 100.0f; }
+
+    *total_prev = idle 
+        + non_idle;
+
+    *idle_prev = idle;
+
+    printf("[ANALYZER]: toPercent finished\n");
+
+    return percentage;
 }
 
 /*
