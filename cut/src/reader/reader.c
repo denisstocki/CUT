@@ -20,6 +20,7 @@ static void* Reader_threadf(void* const);
 
 // STRUCTURE FOR HOLDING READER OBJECT
 struct reader {
+    Watchdog* watchdog;
     Buffer* buffer;
     pthread_t thread;
     bool thread_started;
@@ -139,6 +140,8 @@ static void* Reader_threadf(
             free(stats.cores);
             break;
         }
+
+        Watchdog_notify(params -> reader -> watchdog);
 
         sleepTime.tv_sec = 1;
         sleepTime.tv_nsec = 0;

@@ -19,6 +19,7 @@
 #include "../buffer/buffer.h"
 #include "../logger/logger.h"
 #include "../reader/reader.h"
+#include "../watchdog/watchdog.h"
 #include "../enums/enums.h"
 #include "tracker.h"
 
@@ -132,6 +133,14 @@ Tracker* Tracker_init(
 int Tracker_start(
     Tracker* tracker
 ) {
+    Watchdog* watchdogR;
+
+    watchdogR = Watchdog_init(tracker -> status, "READER");
+
+    if (
+        watchdogR == NULL
+    ) { return ERR_ALLOC; }
+    
     if (tracker == NULL) { return ERR_PARAMS; }
     if (tracker -> status != CREATED) { return ERR_PARAMS; }
 
@@ -148,7 +157,7 @@ int Tracker_start(
 
     Logger_log("TRACKER", "STARTING READER");
 
-    if (Reader_start(tracker -> reader, &(tracker -> status)) != SUCCESS) {
+    if (Reader_start(tracker -> reader, &(tracker -> status), watchdogR) != SUCCESS) {
         Logger_log("TRACKER", "ERROR WHEN RUNNING READER");
         Tracker_destroy(tracker);
         return ERR_RUN;
