@@ -19,7 +19,6 @@
 #include "../buffer/buffer.h"
 #include "../logger/logger.h"
 #include "../reader/reader.h"
-#include "../watchdog/watchdog.h"
 #include "../enums/enums.h"
 #include "tracker.h"
 
@@ -38,8 +37,8 @@ struct tracker {
 /*
     METHOD: Tracker_init
     ARGUMENTS: none
-    PURPOSE: creation of Tracker 'object'
-    RETURN: Tracker 'object' or NULL in 
+    PURPOSE: creation of Tracker object
+    RETURN: Tracker object or NULL in 
         case creation was not possible 
 */
 Tracker* Tracker_init(
@@ -49,69 +48,32 @@ Tracker* Tracker_init(
     Buffer* bufferRA;
     Buffer* bufferAP;
     Reader* reader;
+    Analyzer* analyzer;
+    Printer* printer;
+    long proc;
 
     tracker = (Tracker*) malloc(sizeof(Tracker));
 
     if (tracker == NULL) { return NULL; }
-    if (Logger_init() == ERR_INIT) { return NULL; }
+    if (Logger_init() != SUCCESS) { goto err_logger_init; }
 
-    long proc = sysconf(_SC_NPROCESSORS_ONLN);
-    
-    if (proc <= 0) {
-        free(tracker);
-        Logger_destroy();
-        return NULL;
-    }
+    proc = sysconf(_SC_NPROCESSORS_ONLN);
+    if (proc <= 0) { goto err_proc_load; }
 
     bufferRA = Buffer_init(sizeof(ProcessorStats) + sizeof(CoreStats) * (unsigned long) proc, 32);
-
-    if (bufferRA == NULL) { 
-        free(tracker);
-        Logger_destroy();
-        return NULL; 
-    }
+    if (bufferRA == NULL) { goto err_proc_load; }
     
     reader = Reader_init(bufferRA, proc);
-
-    if (reader == NULL) {
-        free(tracker);
-        Buffer_free(bufferRA);
-        Logger_destroy();
-        return NULL;
-    }
+    if (reader == NULL) { goto err_reader_init; }
 
     bufferAP = Buffer_init(sizeof(ConvertedStats) + sizeof(float) * (unsigned long) proc, 32);
+    if (bufferAP == NULL) { goto err_bufferAP_init; }
 
-    if (bufferAP == NULL) { 
-        free(bufferRA);
-        free(reader);
-        free(tracker);
-        Logger_destroy();
-        return NULL; 
-    }
+    analyzer = Analyzer_init(bufferRA, bufferAP, proc);
+    if (analyzer == NULL) { goto err_analyzer_init; }
 
-    Analyzer* analyzer = Analyzer_init(bufferRA, bufferAP, proc);
-
-    if (analyzer == NULL) {
-        free(tracker);
-        Buffer_free(bufferRA);
-        Buffer_free(bufferAP);
-        Reader_destroy(reader);
-        Logger_destroy();
-        return NULL;
-    }
-
-    Printer* printer = Printer_init(bufferAP, proc);
-
-    if (printer == NULL) {
-        free(tracker);
-        Buffer_free(bufferRA);
-        Buffer_free(bufferAP);
-        Reader_destroy(reader);
-        Analyzer_destroy(analyzer);
-        Logger_destroy();
-        return NULL;
-    }
+    printer = Printer_init(bufferAP, proc);
+    if (printer == NULL) { goto err_printer_init; }
     
     *tracker = (Tracker) {
         .reader = reader,
@@ -123,24 +85,35 @@ Tracker* Tracker_init(
     };
 
     return tracker;
+
+    err_printer_init:
+        Analyzer_destroy(analyzer);
+    err_analyzer_init:
+        Buffer_destroy(bufferAP);
+    err_bufferAP_init:
+        Reader_destroy(reader);
+    err_reader_init:
+        Buffer_destroy(bufferRA);
+    err_proc_load:
+        Logger_destroy();
+    err_logger_init:
+        free(tracker);
+
+    printf("[TRACKER]: MEMORY ALLOCATION ERROR\n");
+
+    return NULL;
 }
 
 /*
     METHOD: Tracker_start
-    PURPOSE: start of whole Tracker 'object''s thread work
-    RETURN: nothing
+    ARGUMENTS:
+        tracker - reference to an object which is Tracker_start function going to work on
+    PURPOSE: start of whole Tracker object's thread work
+    RETURN: enums integer value
 */
 int Tracker_start(
-    Tracker* tracker
+    Tracker* const tracker
 ) {
-    Watchdog* watchdogR;
-
-    watchdogR = Watchdog_init(tracker -> status, "READER");
-
-    if (
-        watchdogR == NULL
-    ) { return ERR_ALLOC; }
-    
     if (tracker == NULL) { return ERR_PARAMS; }
     if (tracker -> status != CREATED) { return ERR_PARAMS; }
 
@@ -157,8 +130,8 @@ int Tracker_start(
 
     Logger_log("TRACKER", "STARTING READER");
 
-    if (Reader_start(tracker -> reader, &(tracker -> status), watchdogR) != SUCCESS) {
-        Logger_log("TRACKER", "ERROR WHEN RUNNING READER");
+    if (Reader_start(tracker -> reader, &(tracker -> status)) != SUCCESS) {
+        Logger_log("TRACKER", "ERROR WHEN STARTING READER");
         Tracker_destroy(tracker);
         return ERR_RUN;
     }
@@ -166,7 +139,7 @@ int Tracker_start(
     Logger_log("TRACKER", "STARTING ANALYZER");
 
     if (Analyzer_start(tracker -> analyzer, &(tracker -> status)) != SUCCESS) {
-        Logger_log("TRACKER", "ERROR WHEN RUNNING ANALYZER");
+        Logger_log("TRACKER", "ERROR WHEN STARTING ANALYZER");
         Tracker_destroy(tracker);
         return ERR_RUN;
     }
@@ -174,9 +147,17 @@ int Tracker_start(
     Logger_log("TRACKER", "STARTING PRINTER");
 
     if (Printer_start(tracker -> printer, &(tracker -> status)) != SUCCESS) {
-        Logger_log("TRACKER", "ERROR WHEN RUNNING PRINTER");
+        Logger_log("TRACKER", "ERROR WHEN STARTING PRINTER");
         Tracker_destroy(tracker);
         return ERR_RUN;
+    }
+
+    Logger_log("TRACKER", "JOINING LOGGER");
+
+    if (Logger_join()) {
+        Logger_log("TRACKER", "ERROR WHEN JOINING LOGGER");
+        Tracker_destroy(tracker);
+        return ERR_JOIN;
     }
 
     Logger_log("TRACKER", "JOINING READER");
@@ -203,16 +184,6 @@ int Tracker_start(
         return ERR_JOIN;
     }
 
-    Logger_log("TRACKER", "JOINING LOGGER");
-
-    if (Logger_join()) {
-        Logger_log("TRACKER", "ERROR WHEN JOINING LOGGER");
-        Tracker_destroy(tracker);
-        return ERR_JOIN;
-    }
-
-    Tracker_destroy(tracker);
-
     Logger_log("TRACKER", "START FINISHED WITH SUCCESS");
 
     return SUCCESS;
@@ -220,6 +191,8 @@ int Tracker_start(
 
 /*
     METHOD: Tracker_terminate
+    ARGUMENTS: 
+        tracker
     PURPOSE: sets status on a given tracker to a TERMINATED status if possible
     RETURN: nothing
 */

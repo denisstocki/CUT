@@ -10,8 +10,12 @@
 #include <stdbool.h>
 #include "printer.h"
 #include "../enums/enums.h"
+#include "../watchdog/watchdog.h"
+#include "../notifier/notifier.h"
 
 struct printer {
+    Watchdog* watchdog;
+    Notifier* notifier;
     Buffer* bufferAP;
     pthread_t thread;
     long proc;
@@ -39,6 +43,8 @@ Printer* Printer_init(
     Buffer* bufferAP,
     long proc
 ) {
+    Watchdog* watchdog;
+    Notifier* notifier;
     printf("[PRINTER]: INIT STARTED\n");
 
     if (bufferAP == NULL || proc <= 0) { return NULL; }
@@ -46,8 +52,18 @@ Printer* Printer_init(
     Printer* printer = (Printer*) malloc(sizeof(Printer));
 
     if (printer == NULL) { return NULL; }
+
+    notifier = Notifier_init();
+
+    if (notifier == NULL) { return NULL; }
+
+    watchdog = Watchdog_init(notifier, "READER");
+
+    if (watchdog == NULL) { return NULL; }
     
     *printer = (Printer) {
+        .watchdog = watchdog,
+        .notifier = notifier,
         .bufferAP = bufferAP,
         .proc = proc,
         .thread_started = false
@@ -118,11 +134,15 @@ static void* Printer_threadf(
         pthread_exit(NULL);
     } 
 
+    Watchdog_start(params -> printer -> watchdog, params -> status);
+
     while (*(params -> status) == RUNNING) {
         if (Buffer_pop(params -> printer -> bufferAP, converted) != SUCCESS) {
             free(converted);
             break;
         }
+
+        Notifier_notify(params -> printer -> notifier);
 
         Printer_print(converted);
         
@@ -133,6 +153,8 @@ static void* Printer_threadf(
 
         nanosleep(&sleepTime, NULL);
     }
+
+    Watchdog_join(params -> printer -> watchdog);
 
     printf("[ANALYZER]: THREAD FUNCTION FINISHED\n");
 
@@ -194,6 +216,9 @@ void Printer_destroy(
     printf("[PRINTER]: DESTROY STARTED\n");
 
     if (printer == NULL) { return; }
+
+    Watchdog_destroy(printer -> watchdog);
+    Notifier_destroy(printer -> notifier);
     
     free(printer);
 

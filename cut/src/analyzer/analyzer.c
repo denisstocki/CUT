@@ -10,6 +10,8 @@
 #include <stdbool.h>
 #include "analyzer.h"
 #include "../enums/enums.h"
+#include "../watchdog/watchdog.h"
+#include "../notifier/notifier.h"
 
 // PROTOTYPE FUNCTIONS FOR INSIDE WORLD
 static void* Analyzer_threadf(void* args);
@@ -18,6 +20,8 @@ static float Analyzer_toPercent(CoreStats*, long*, long*);
 
 // STRUCTURE FOR HOLDING ANALYZER OBJECT
 struct analyzer {
+    Watchdog* watchdog;
+    Notifier* notifier;
     Buffer* bufferRA;
     Buffer* bufferAP;
     pthread_t thread;
@@ -48,6 +52,8 @@ Analyzer* Analyzer_init(
     Buffer* bufferAP,
     long proc
 ) {
+    Watchdog* watchdog;
+    Notifier* notifier;
     printf("[ANALYZER]: INIT STARTED\n");
 
     if (
@@ -61,8 +67,18 @@ Analyzer* Analyzer_init(
     Analyzer* analyzer = (Analyzer*) malloc(sizeof(Analyzer));
 
     if (analyzer == NULL) { return NULL; }
+
+    notifier = Notifier_init();
+
+    if (notifier == NULL) { return NULL; }
+
+    watchdog = Watchdog_init(notifier, "ANALYZER");
+
+    if (watchdog == NULL) { return NULL; }
     
     *analyzer = (Analyzer) {
+        .watchdog = watchdog,
+        .notifier = notifier,
         .bufferRA = bufferRA,
         .bufferAP = bufferAP,
         .thread_started = false,
@@ -152,6 +168,8 @@ static void* Analyzer_threadf(
         pthread_exit(NULL);
     } 
 
+    Watchdog_start(params -> analyzer -> watchdog, params -> status);
+
     while (*(params -> status) == RUNNING) {
         if (Buffer_pop(params -> analyzer -> bufferRA, stats) != SUCCESS) {
             free(stats);
@@ -166,6 +184,8 @@ static void* Analyzer_threadf(
             }
         }
 
+        Notifier_notify(params -> analyzer -> notifier);
+
         free(stats -> cores);
         
         sleepTime.tv_sec = 1;
@@ -173,6 +193,8 @@ static void* Analyzer_threadf(
 
         nanosleep(&sleepTime, NULL);
     }
+
+    Watchdog_join(params -> analyzer -> watchdog);
 
     printf("[ANALYZER]: THREAD FUNCTION FINISHED\n");
 
@@ -323,6 +345,9 @@ void Analyzer_destroy(
     printf("[ANALYZER]: DESTROY STARTED\n");
 
     if (analyzer == NULL) { return; }
+
+    Watchdog_destroy(analyzer -> watchdog);
+    Notifier_destroy(analyzer -> notifier);
     
     analyzer -> cpu_idle_prev = 0;
     analyzer -> cpu_total_prev = 0;

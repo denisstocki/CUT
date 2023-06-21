@@ -29,8 +29,9 @@ static Tracker* tracker;
 void handle_sigterm(
     int const signum
 ) {
-    if (signum == SIGINT 
-        || signum == SIGTERM
+    if (
+        signum == SIGINT || 
+        signum == SIGTERM
     ) {
         printf("\n");
         Tracker_terminate(tracker);
@@ -40,8 +41,9 @@ void handle_sigterm(
 /*
     METHOD: main
     ARGUMENTS: none
-    PURPOSE: invocation of behaviour expected from Tracker 'object' (runs whole programme)
-    RETURN: an integer number describing correction of this function's execution
+    PURPOSE: invocation of behaviour expected from Tracker object
+    RETURN: an integer number describing correction 
+        of this function's execution
 */
 int main(
     void
@@ -54,6 +56,8 @@ int main(
     signal(SIGTERM, handle_sigterm);
 
     if (Tracker_start(tracker) != SUCCESS) { return -1; }
+
+    Tracker_destroy(tracker);
     
     return 0;
 }

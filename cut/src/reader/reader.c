@@ -10,6 +10,8 @@
 #include <stdbool.h>
 #include "reader.h"
 #include "../enums/enums.h"
+#include "../watchdog/watchdog.h"
+#include "../notifier/notifier.h"
 
 // PATH FOR FILE THAT READER WILL RECEIVE DATA FROM
 #define PATH "/proc/stat"
@@ -21,6 +23,7 @@ static void* Reader_threadf(void* const);
 // STRUCTURE FOR HOLDING READER OBJECT
 struct reader {
     Watchdog* watchdog;
+    Notifier* notifier;
     Buffer* buffer;
     pthread_t thread;
     bool thread_started;
@@ -44,6 +47,8 @@ Reader* Reader_init(
     Buffer* const buffer,
     const long proc
 ) {
+    Watchdog* watchdog;
+    Notifier* notifier;
     printf("[READER]: INIT STARTED\n");
 
     if (proc <= 0 || buffer == NULL) { return NULL; }
@@ -52,7 +57,18 @@ Reader* Reader_init(
     
     if (reader == NULL) { return NULL; }
 
+    notifier = Notifier_init();
+
+    if (notifier == NULL) { return NULL; }
+
+    watchdog = Watchdog_init(notifier, "READER");
+
+    if (watchdog == NULL) { return NULL; }
+    
+
     *reader = (Reader) { 
+        .watchdog = watchdog,
+        .notifier = notifier,
         .buffer = buffer,
         .thread_started = false,
         .proc = proc
@@ -131,6 +147,8 @@ static void* Reader_threadf(
     ProcessorStats stats;
     struct timespec sleepTime;
 
+    Watchdog_start(params -> reader -> watchdog, params -> status);
+
     while (*(params -> status) == RUNNING) {
         if (Reader_read(&stats, params -> reader -> proc) != SUCCESS) {
             break;
@@ -141,13 +159,15 @@ static void* Reader_threadf(
             break;
         }
 
-        Watchdog_notify(params -> reader -> watchdog);
+        Notifier_notify(params -> reader -> notifier);
 
         sleepTime.tv_sec = 1;
         sleepTime.tv_nsec = 0;
 
         nanosleep(&sleepTime, NULL);
     }
+
+    Watchdog_join(params -> reader -> watchdog);
 
     Logger_log("READER", "THREAD FUNCTION FINISHED");
 
@@ -244,6 +264,8 @@ void Reader_destroy(
 
     if (reader == NULL) { return; }
 
+    Watchdog_destroy(reader -> watchdog);
+    Notifier_destroy(reader -> notifier);
     reader -> proc = 0;
     reader -> thread_started = false;
 

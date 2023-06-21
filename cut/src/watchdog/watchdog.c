@@ -11,16 +11,21 @@
 #include <time.h>       
 #include <sys/time.h>   
 #include "../enums/enums.h"
+#include "../notifier/notifier.h"
 #include "watchdog.h"
 
 struct watchdog {
-    pthread_cond_t can_notify;
-    pthread_cond_t can_check;
-    pthread_mutex_t mutex;
-    volatile sig_atomic_t* status;
+    pthread_t thread;
+    Notifier* notifier;
     char* name;
-    bool notified;
 };
+
+typedef struct ThreadParams {
+    Watchdog* watchdog;
+    volatile sig_atomic_t* status;
+} ThreadParams;
+
+static void* Watchdog_watch(void* const);
 
 /*
     METHOD: Watchdog_init
@@ -29,116 +34,87 @@ struct watchdog {
         case creation was not possible 
 */
 Watchdog* Watchdog_init(
-    volatile sig_atomic_t* status,
+    Notifier* notifier,
     char* name
 ) {
     Watchdog* watchdog;
 
-    if (name == NULL || status == TERMINATED) { return NULL; }
+    if (name == NULL || notifier == NULL) { return NULL; }
     
     watchdog = (Watchdog*) malloc(sizeof(Watchdog));
 
     if (watchdog == NULL) { return NULL; }
-
+    
     *watchdog = (Watchdog) {
-        .mutex = PTHREAD_MUTEX_INITIALIZER,
-        .can_notify = PTHREAD_COND_INITIALIZER,
-        .can_check = PTHREAD_COND_INITIALIZER,
-        .notified = true,
-        .status = status
+        .notifier = notifier,
+        .name = name
     };
 
     return watchdog;
 }
 
-/*
-    METHOD: Buffer_isEmpty
-    PURPOSE: check if a given Buffer 'object' is empty
-    RETURN: true in case it is empty, else false
-*/
-bool Buffer_isEmpty(
-    Buffer* buffer
+int Watchdog_start(
+    Watchdog* watchdog,
+    volatile sig_atomic_t* status
 ) {
-    if (buffer == NULL) { return false; }
+    if (watchdog == NULL || *status != RUNNING) { return ERR_PARAMS; }
+    
+    ThreadParams* params = (ThreadParams*) malloc(sizeof(ThreadParams));
 
-    if (buffer -> count == 0) { return true; }
-    else { return false; }
-}
+    if (params == NULL) { return ERR_ALLOC; }
 
-bool Buffer_isFull(
-    Buffer* buffer
-) {
-    if (buffer == NULL) { return false; }
+    *params = (ThreadParams) {
+        .watchdog = watchdog,
+        .status = status
+    };
 
-    if (buffer -> count == buffer -> capacity) { return true; }
-    else { return false; }
-}
-
-int Buffer_push(
-    Buffer* buffer, 
-    void* element
-) {
-    if (buffer == NULL || element == NULL) { return ERR_PARAMS; }
-
-    pthread_mutex_lock(&buffer->mutex);
-
-    if (Buffer_isFull(buffer)) {
-        pthread_cond_wait(&(buffer -> can_produce), &(buffer -> mutex));
+    if (pthread_create(&(watchdog -> thread), NULL, Watchdog_watch, (void*) params) != 0) {
+        return ERR_CREATE;
     }
 
-    uint8_t* ptr = &(buffer -> elements[buffer -> head * buffer -> size]);
-
-    memcpy(
-        ptr, 
-        element, 
-        buffer -> size
-    );
-
-    buffer -> count++;
-    buffer -> head = (buffer -> head + 1) % buffer -> capacity;
-
-    pthread_cond_signal(&(buffer -> can_consume));
-    pthread_mutex_unlock(&(buffer -> mutex));
     return SUCCESS;
 }
 
-int Buffer_pop(
-    Buffer* buffer, 
-    void* element
+static void* Watchdog_watch(
+    void* const args
 ) {
-    if (buffer == NULL || element == NULL) { return ERR_PARAMS; }
+    ThreadParams* params = (ThreadParams*) args;
+    bool notified = false;
 
-    pthread_mutex_lock(&(buffer -> mutex));
+    while (*(params -> status) == RUNNING) {
+        sleep(2);
 
-    if (Buffer_isEmpty(buffer)) {
-        pthread_cond_wait(&(buffer -> can_consume), &(buffer -> mutex));
+        if (Notifier_check(params -> watchdog -> notifier, &notified) != SUCCESS) {
+            free(params);
+            pthread_exit(NULL);
+        }
+
+        if (!notified) {
+            *params -> status = TERMINATED;
+            break;
+        }
     }
 
-    uint8_t* ptr = &(buffer -> elements[buffer -> tail * buffer -> size]);
+    Logger_log("READER", "THREAD FUNCTION FINISHED");
 
-    memcpy(
-        element,
-        ptr,  
-        buffer -> size
-    );
+    free(params);
+    pthread_exit(NULL);
+}
 
-    buffer -> count--;
-    buffer -> tail = (buffer -> tail + 1) % buffer -> capacity;
+int Watchdog_join(
+    Watchdog* watchdog
+) {
+    if (watchdog == NULL) { return ERR_PARAMS; }
 
-    pthread_cond_signal(&(buffer -> can_produce));
-    pthread_mutex_unlock(&(buffer -> mutex));
+    if (pthread_join(watchdog -> thread, NULL) != 0) { return ERR_JOIN; }
     
     return SUCCESS;
 }
 
-void Buffer_free(
-    Buffer* buffer
+void Watchdog_destroy(
+    Watchdog* watchdog
 ) {
-    if (buffer == NULL) { return; }
+    if (watchdog == NULL) { return; }
 
-    pthread_mutex_destroy(&(buffer -> mutex));
-    pthread_cond_destroy(&(buffer -> can_produce));
-    pthread_cond_destroy(&(buffer -> can_consume));
-
-    free(buffer);
+    free(watchdog);
 }
