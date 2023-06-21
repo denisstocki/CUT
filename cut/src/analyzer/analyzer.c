@@ -12,6 +12,7 @@
 #include "../enums/enums.h"
 #include "../watchdog/watchdog.h"
 #include "../notifier/notifier.h"
+#include "../stats/stats.h"
 
 // PROTOTYPE FUNCTIONS FOR INSIDE WORLD
 static void* Analyzer_threadf(void* args);

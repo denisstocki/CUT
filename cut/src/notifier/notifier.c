@@ -4,15 +4,19 @@
     PURPOSE: implementation of notifier module
 */
 
+// INCLUDES OF OUTSIDE LIBRARIES
 #include <pthread.h>    
 #include <stdlib.h>     
 #include <string.h>     
 #include <stdbool.h>     
 #include <time.h>       
 #include <sys/time.h>   
+
+// INCLUDES OF INSIDE LIBRARIES
 #include "../enums/enums.h"
 #include "notifier.h"
 
+// STRUCTURE FOR HOLDING NOTIFIER OBJECT
 struct notifier {
     pthread_cond_t can_notify;
     pthread_cond_t can_check;
@@ -21,8 +25,15 @@ struct notifier {
     char padding[7];
 };
 
+/*
+    METHOD: Notifier_init
+    ARGUMENTS: none
+    PURPOSE: creation of Notifier object
+    RETURN: Notifier object or NULL in 
+        case creation was not possible 
+*/
 Notifier* Notifier_init(
-
+    void
 ) {
     Notifier* notifier;
 
@@ -40,8 +51,15 @@ Notifier* Notifier_init(
     return notifier;
 }
 
+/*
+    METHOD: Notifier_notify
+    ARGUMENTS: 
+        notifier - an object which notified field will be changed on
+    PURPOSE: thread safe change of notfied field to true
+    RETURN: enums integer value
+*/
 int Notifier_notify(
-    Notifier* notifier
+    Notifier* const notifier
 ) {
     if (notifier == NULL) { return ERR_PARAMS; }
     
@@ -54,8 +72,16 @@ int Notifier_notify(
     return SUCCESS;
 }
 
+/*
+    METHOD: Notifier_check
+    ARGUMENTS: 
+        notifier - an object which notified field will be checked on
+        notfied - a pointer to a variable which the result will be saved into
+    PURPOSE: save of notified value to a given pointer
+    RETURN: enums integer value
+*/
 int Notifier_check(
-    Notifier* notifier,
+    Notifier* const notifier,
     bool* notified
 ) {
     if (notifier == NULL || notified == NULL) { return ERR_PARAMS; }
@@ -72,8 +98,15 @@ int Notifier_check(
     return SUCCESS;
 }
 
+/*
+    METHOD: Notifier_destroy
+    ARGUMENTS: 
+        notifier - an object which memory will be freed
+    PURPOSE: free of a given object
+    RETURN: nothing
+*/
 void Notifier_destroy(
-    Notifier* notifier
+    Notifier* const notifier
 ) {
     if (notifier == NULL) { return ; }
     

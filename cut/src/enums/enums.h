@@ -1,19 +1,19 @@
 /*
     AUTHOR: DENIS STOCKI                  
-    FILE: tracker.h                       
-    PURPOSE: interface for tracker module 
+    FILE: enums.h                       
+    PURPOSE: interface for enums module 
 */
 
 #ifndef ENUMS_H
 #define ENUMS_H
 
-enum {
+enum states {
     CREATED,
     RUNNING, 
     TERMINATED
 };
 
-enum {
+enum errors {
     ERR_ALLOC,
     ERR_PARAMS,
     ERR_FILE_OPEN,

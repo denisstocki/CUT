@@ -20,6 +20,7 @@
 #include "../logger/logger.h"
 #include "../reader/reader.h"
 #include "../enums/enums.h"
+#include "../stats/stats.h"
 #include "tracker.h"
 
 // STRUCTURE FOR HOLDING TRACKER OBJECT

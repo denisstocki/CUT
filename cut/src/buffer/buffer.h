@@ -1,24 +1,26 @@
 /*
     AUTHOR: DENIS STOCKI                  
-    FILE: logger.h                       
-    PURPOSE: interface for logger module 
+    FILE: buffer.h                       
+    PURPOSE: interface for buffer module 
 */
 
 #ifndef BUFFER_H
 #define BUFFER_H
 
+// INCLUDES OF OUTSIDE LIBRARIES
 #include <stdbool.h>    
 #include <stdint.h>     
 #include <stddef.h>     
-#include "../stats/stats.h"
 
+// ENCAPSULATION ON BUFFER OBJECT
 typedef struct buffer Buffer;
 
-Buffer* Buffer_init(size_t size, size_t capacity);
-bool Buffer_isEmpty(Buffer*);
-bool Buffer_isFull(Buffer*);
-int Buffer_push(Buffer*, void*);
-int Buffer_pop(Buffer*, void*);
-void Buffer_free(Buffer*);
+// DECLARATIONS OF OUTSIDE PROTOTYPES
+Buffer* Buffer_init(size_t const, size_t const);
+bool Buffer_isEmpty(Buffer* const);
+bool Buffer_isFull(Buffer* const);
+int Buffer_push(Buffer* const, void*);
+int Buffer_pop(Buffer* const, void*);
+void Buffer_destroy(Buffer* const);
 
 #endif 

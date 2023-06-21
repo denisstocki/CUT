@@ -4,16 +4,21 @@
     PURPOSE: implementation of reader module
 */
 
+// INCLUDES OF OUTSIDE LIBRARIES
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
 #include <stdbool.h>
+
+// INCLUDES OF INSIDE LIBRARIES
 #include "reader.h"
 #include "../enums/enums.h"
 #include "../watchdog/watchdog.h"
 #include "../notifier/notifier.h"
+#include "../logger/logger.h"
+#include "../stats/stats.h"
 
-// PATH FOR FILE THAT READER WILL RECEIVE DATA FROM
+// MACRO DEFINITION
 #define PATH "/proc/stat"
 
 // PROTOTYPE FUNCTIONS FOR INSIDE WORLD
@@ -26,8 +31,6 @@ struct reader {
     Notifier* notifier;
     Buffer* buffer;
     pthread_t thread;
-    bool thread_started;
-    char padding[7];
     long proc;
 };
 
@@ -39,9 +42,11 @@ typedef struct ThreadParams {
 
 /*
     METHOD: Reader_init
-    PURPOSE: creation of Reader 'object'
-    RETURN: Reader 'object' or NULL in 
-        case creation was not possible 
+    ARGUMENTS:
+        buffer - buffer object to work on
+        proc - number of computer's cores
+    PURPOSE: creation of Reader object
+    RETURN: Reader object or NULL in case creation was not possible 
 */
 Reader* Reader_init(
     Buffer* const buffer,
@@ -49,11 +54,13 @@ Reader* Reader_init(
 ) {
     Watchdog* watchdog;
     Notifier* notifier;
-    printf("[READER]: INIT STARTED\n");
+    Reader* reader;
+
+    Logger_log("READER", "INIT STARTED");
 
     if (proc <= 0 || buffer == NULL) { return NULL; }
     
-    Reader* reader = (Reader*) malloc(sizeof(Reader));
+    reader = (Reader*) malloc(sizeof(Reader));
     
     if (reader == NULL) { return NULL; }
 
@@ -70,26 +77,28 @@ Reader* Reader_init(
         .watchdog = watchdog,
         .notifier = notifier,
         .buffer = buffer,
-        .thread_started = false,
         .proc = proc
     };
 
-    printf("[READER]: INIT FINISHED\n");
+    Logger_log("READER", "INIT FINISHED");
 
     return reader;
 }
 
 /*
     METHOD: Reader_start
-    PURPOSE: creation and start of a given 
-        object's thread
-    RETURN: finish code meaning if function 
-        worked propely
+    ARUGMENTS:
+        reader - reader object to work on
+        status - a pointer to tracker's status field
+    PURPOSE: creation and start of a given object's thread
+    RETURN: finish code meaning if function worked propely
 */
 int Reader_start(
     Reader* const reader,
     volatile sig_atomic_t* status
 ) {
+    ThreadParams* params;
+
     Logger_log("READER", "START STARTED");
 
     if (
@@ -97,7 +106,7 @@ int Reader_start(
         *status != RUNNING
     ) { return ERR_PARAMS; }
 
-    ThreadParams* params = (ThreadParams*) malloc(sizeof(ThreadParams));
+    params = (ThreadParams*) malloc(sizeof(ThreadParams));
 
     if (params == NULL) { return ERR_ALLOC; }
 
@@ -110,23 +119,25 @@ int Reader_start(
         return ERR_CREATE;
     }
 
-    reader -> thread_started = true;
-
     Logger_log("READER", "START FINISHED");
 
     return SUCCESS;
 }
 
+/*
+    METHOD: Reader_join
+    ARUGMENTS:
+        reader - reader object to work on
+    PURPOSE: join of a given object's thread to its parent thread
+    RETURN: enums integer value
+*/
 int Reader_join(
     Reader* const reader
 ) {
     Logger_log("READER", "JOIN STARTED");
 
     if (reader == NULL) { return ERR_PARAMS; }
-    if (reader -> thread_started == false) { return ERR_PARAMS; }
-    if (pthread_join(reader -> thread, NULL) != 0) {
-        return ERR_JOIN;
-    }
+    if (pthread_join(reader -> thread, NULL) != 0) { return ERR_JOIN; }
 
     Logger_log("READER", "JOIN FINISHED");
 
@@ -134,44 +145,62 @@ int Reader_join(
 }
 
 /*
-    METHOD: Reader_thread_function
+    METHOD: Reader_threadf
+    ARUGMENTS:
+        args - a pointer to function's parameters
     PURPOSE: acomplishing reader's thread work
-    RETURN: NULL
+    RETURN: enums integer value
 */
 static void* Reader_threadf(
     void* const args
 ) {
+    ThreadParams* params;
+    ProcessorStats stats;
+    struct timespec timebreak;
+
     Logger_log("READER", "THREAD FUNCTION STARTED");
 
-    ThreadParams* params = (ThreadParams*) args;
-    ProcessorStats stats;
-    struct timespec sleepTime;
+    params = (ThreadParams*) args;
 
-    Watchdog_start(params -> reader -> watchdog, params -> status);
+    Logger_log("READER", "STARTING WATCHDOG THREAD");
+
+    if (Watchdog_start(params -> reader -> watchdog, params -> status) != SUCCESS) {
+        Logger_log("READER", "COULD NOT START WATCHDOG THREAD");
+        free(params);
+        pthread_exit(NULL);
+    }
 
     while (*(params -> status) == RUNNING) {
         if (Reader_read(&stats, params -> reader -> proc) != SUCCESS) {
+            Logger_log("READER", "READ FAILED");
             break;
         }
         
         if (Buffer_push(params -> reader -> buffer, &stats) != SUCCESS) {
+            Logger_log("READER", "PUSH FAILED");
             free(stats.cores);
             break;
         }
 
-        Notifier_notify(params -> reader -> notifier);
+        if (Notifier_notify(params -> reader -> notifier)) {
+            Logger_log("READER", "NOTIFY FAILED");
+            free(stats.cores);
+            break;
+        }
 
-        sleepTime.tv_sec = 1;
-        sleepTime.tv_nsec = 0;
+        timebreak.tv_sec = 1;
+        timebreak.tv_nsec = 0;
 
-        nanosleep(&sleepTime, NULL);
+        nanosleep(&timebreak, NULL);
     }
+
+    Logger_log("READER", "JOINING WATCHDOG THREAD");
 
     Watchdog_join(params -> reader -> watchdog);
 
-    Logger_log("READER", "THREAD FUNCTION FINISHED");
-
     free(params);
+
+    Logger_log("READER", "THREAD FUNCTION FINISHED");
 
     pthread_exit(NULL);
 }
@@ -181,15 +210,26 @@ static void* Reader_threadf(
     PURPOSE: reads all required data from a saved file field
     RETURN: Stats 'object' including necessary data or null
 */
+/*
+    METHOD: Reader_read
+    ARUGMENTS:
+        processorStats - object that data will be saved to
+        proc - computer's core count
+    PURPOSE: reads all required data from a saved file field
+    RETURN: enums integer value
+*/
 int Reader_read(
     ProcessorStats* const processorStats,
     const long proc
 ) {
+    FILE* file;
+    int coreCount;
+
     Logger_log("READER", "READ STARTED");
 
     if (processorStats == NULL || proc <= 0) { return ERR_PARAMS; }
     
-    FILE* file = fopen(PATH, "r");
+    file = fopen(PATH, "r");
 
     if (file == NULL) {
         return ERR_FILE_OPEN; 
@@ -218,7 +258,7 @@ int Reader_read(
         return ERR_ALLOC; 
     }
 
-    int coreCount = 0;
+    coreCount = 0;
 
     while (coreCount < proc) {
         if (fscanf(
@@ -267,7 +307,6 @@ void Reader_destroy(
     Watchdog_destroy(reader -> watchdog);
     Notifier_destroy(reader -> notifier);
     reader -> proc = 0;
-    reader -> thread_started = false;
 
     free(reader);
 

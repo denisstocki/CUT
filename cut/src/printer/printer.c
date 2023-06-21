@@ -12,6 +12,7 @@
 #include "../enums/enums.h"
 #include "../watchdog/watchdog.h"
 #include "../notifier/notifier.h"
+#include "../stats/stats.h"
 
 struct printer {
     Watchdog* watchdog;
