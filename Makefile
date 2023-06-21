@@ -1,28 +1,27 @@
-# Zmienne
 CC = clang
 CFLAGS = -Weverything -std=c99
 LDFLAGS = -pthread
-SRCDIR = cut/src
-BUILDDIR = out
-TARGET = cut
 
-# Pliki źródłowe
-SRCS = $(wildcard $(SRCDIR)/*.c)
-OBJS = $(patsubst $(SRCDIR)/%.c,$(BUILDDIR)/%.o,$(SRCS))
+SRC_DIR = cut/src
+OBJ_DIR = cut/out
 
-# Reguły kompilacji
-$(BUILDDIR)/%.o: $(SRCDIR)/%.c
-	$(CC) $(CFLAGS) -c -o $@ $<
+SOURCES = $(wildcard $(SRC_DIR)/**/*.c)
+OBJECTS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(SOURCES))
+EXECUTABLE = main
 
-# Reguła docelowa
-$(TARGET): $(OBJS)
-	$(CC) $(LDFLAGS) -o $@ $^
+.PHONY: all clean run
 
-# Reguła czyszczenia
+all: $(EXECUTABLE)
+
+$(EXECUTABLE): $(OBJECTS)
+	$(CC) $(LDFLAGS) $^ -o $@
+
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
+	@mkdir -p $(@D)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+run: $(EXECUTABLE)
+	./$(EXECUTABLE)
+
 clean:
-	rm -f $(BUILDDIR)/*.o $(TARGET)
-
-# Domyślna reguła
-all: $(TARGET)
-
-.PHONY: all clean
+	rm -rf $(OBJ_DIR) $(EXECUTABLE)

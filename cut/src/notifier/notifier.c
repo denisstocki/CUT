@@ -18,8 +18,6 @@
 
 // STRUCTURE FOR HOLDING NOTIFIER OBJECT
 struct notifier {
-    pthread_cond_t can_notify;
-    pthread_cond_t can_check;
     pthread_mutex_t mutex;
     bool notified;
     char padding[7];
@@ -42,8 +40,6 @@ Notifier* Notifier_init(
     if (notifier == NULL) { return NULL; }
     
     *notifier = (Notifier) {
-        .can_check = PTHREAD_COND_INITIALIZER,
-        .can_notify = PTHREAD_COND_INITIALIZER,
         .mutex = PTHREAD_MUTEX_INITIALIZER,
         .notified = false
     };
@@ -110,8 +106,6 @@ void Notifier_destroy(
 ) {
     if (notifier == NULL) { return ; }
     
-    pthread_cond_destroy(&(notifier -> can_check));
-    pthread_cond_destroy(&(notifier -> can_notify));
     pthread_mutex_destroy(&(notifier -> mutex));
 
     free(notifier);

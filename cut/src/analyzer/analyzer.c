@@ -55,6 +55,7 @@ Analyzer* Analyzer_init(
 ) {
     Watchdog* watchdog;
     Notifier* notifier;
+    Analyzer* analyzer;
     printf("[ANALYZER]: INIT STARTED\n");
 
     if (
@@ -65,7 +66,7 @@ Analyzer* Analyzer_init(
         return NULL; 
     }
     
-    Analyzer* analyzer = (Analyzer*) malloc(sizeof(Analyzer));
+    analyzer = (Analyzer*) malloc(sizeof(Analyzer));
 
     if (analyzer == NULL) { return NULL; }
 
@@ -107,6 +108,8 @@ int Analyzer_start(
     Analyzer* const analyzer,
     volatile sig_atomic_t* status
 ) {
+    ThreadParams* params;
+
     printf("[ANALYZER]: START STARTED\n");
 
     if (
@@ -114,7 +117,7 @@ int Analyzer_start(
         *status != RUNNING
     ) { return ERR_PARAMS; }
 
-    ThreadParams* params = (ThreadParams*) malloc(sizeof(ThreadParams));
+    params = (ThreadParams*) malloc(sizeof(ThreadParams));
 
     if (params == NULL) { return ERR_ALLOC; }
 
@@ -158,12 +161,15 @@ int Analyzer_join(
 static void* Analyzer_threadf(
     void* args
 ) {
-    printf("[ANALYZER]: THREAD FUNCTION STARTED\n");
-
-    ThreadParams* params = (ThreadParams*)args;
-    ProcessorStats* stats = malloc(sizeof(ProcessorStats) + sizeof(CoreStats) * (unsigned long) params -> analyzer -> proc);
+    ThreadParams* params;
+    ProcessorStats* stats;
     ConvertedStats converted;
     struct timespec sleepTime;
+
+    printf("[ANALYZER]: THREAD FUNCTION STARTED\n");
+
+    params = (ThreadParams*)args;
+    stats = malloc(sizeof(ProcessorStats) + sizeof(CoreStats) * (unsigned long) params -> analyzer -> proc);
 
     if (stats == NULL) {
         pthread_exit(NULL);
@@ -199,8 +205,8 @@ static void* Analyzer_threadf(
 
     printf("[ANALYZER]: THREAD FUNCTION FINISHED\n");
 
-    free(params);
     free(stats);
+    free(params);
 
     pthread_exit(NULL);
 }
@@ -215,7 +221,9 @@ static int Analyzer_analyze(
     ProcessorStats* processorStats,
     ConvertedStats* convertedStats
 ) {
-    printf("[ANALYZER]: ANALYZE STARTED\n");
+    long idle;
+    long non_idle;
+    // printf("[ANALYZER]: ANALYZE STARTED\n");
 
     if (
         processorStats == NULL || 
@@ -237,10 +245,10 @@ static int Analyzer_analyze(
             return ERR_ALLOC;
         }
 
-        long idle = processorStats -> average.idle 
+        idle = processorStats -> average.idle 
             + processorStats -> average.iowait;
 
-        long non_idle = processorStats -> average.user 
+        non_idle = processorStats -> average.user 
             + processorStats -> average.nice 
             + processorStats -> average.system 
             + processorStats -> average.irq 
@@ -292,7 +300,7 @@ static int Analyzer_analyze(
         );
     }
 
-    printf("[ANALYZER]: ANALYZE FINISHED\n");
+    // printf("[ANALYZER]: ANALYZE FINISHED\n");
 
     return SUCCESS;
 }
@@ -302,25 +310,30 @@ static float Analyzer_toPercent(
     long* total_prev, 
     long* idle_prev
 ) {
-    printf("[ANALYZER]: toPercent started\n");
-    long idle = stats -> idle 
+    long idle;
+    long non_idle;
+    long total;
+    long idled;
+    float percentage;
+    // printf("[ANALYZER]: toPercent started\n");
+    idle = stats -> idle 
         + stats -> iowait;
 
-    long non_idle = stats -> user 
+    non_idle = stats -> user 
         + stats -> nice 
         + stats -> system 
         + stats -> irq 
         + stats -> sortirq 
         + stats -> steal;
 
-    long total = idle 
+    total = idle 
         + non_idle 
         - *total_prev;
 
-    long idled = idle 
+    idled = idle 
         - *idle_prev;
 
-    float percentage = 0.0f;
+    percentage = 0.0f;
 
     if(total != 0) { percentage = (float)(total - idled) / (float) total * 100.0f; }
 
@@ -329,7 +342,7 @@ static float Analyzer_toPercent(
 
     *idle_prev = idle;
 
-    printf("[ANALYZER]: toPercent finished\n");
+    // printf("[ANALYZER]: toPercent finished\n");
 
     return percentage;
 }
@@ -350,11 +363,6 @@ void Analyzer_destroy(
     Watchdog_destroy(analyzer -> watchdog);
     Notifier_destroy(analyzer -> notifier);
     
-    analyzer -> cpu_idle_prev = 0;
-    analyzer -> cpu_total_prev = 0;
-    analyzer -> proc = 0;
-    analyzer -> prev_analyzed = false;
-
     free(analyzer -> cores_total_prev);
     free(analyzer -> cores_idle_prev);
 

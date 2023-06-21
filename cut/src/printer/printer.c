@@ -46,11 +46,13 @@ Printer* Printer_init(
 ) {
     Watchdog* watchdog;
     Notifier* notifier;
+    Printer* printer;
+
     printf("[PRINTER]: INIT STARTED\n");
 
     if (bufferAP == NULL || proc <= 0) { return NULL; }
     
-    Printer* printer = (Printer*) malloc(sizeof(Printer));
+    printer = (Printer*) malloc(sizeof(Printer));
 
     if (printer == NULL) { return NULL; }
 
@@ -79,6 +81,8 @@ int Printer_start(
     Printer* const printer,
     volatile sig_atomic_t* status
 ) {
+    ThreadParams* params;
+
     printf("[PRINTER]: START STARTED\n");
 
     if (
@@ -86,7 +90,7 @@ int Printer_start(
         *status != RUNNING
     ) { return ERR_PARAMS; }
 
-    ThreadParams* params = (ThreadParams*) malloc(sizeof(ThreadParams));
+    params = (ThreadParams*) malloc(sizeof(ThreadParams));
 
     if (params == NULL) { return ERR_ALLOC; }
 
@@ -125,11 +129,14 @@ int Printer_join(
 static void* Printer_threadf(
     void* args
 ) {
+    ThreadParams* params;
+    ConvertedStats* converted;
+    struct timespec sleepTime;
+
     printf("[PRINTER]: THREAD FUNCTION STARTED\n");
 
-    ThreadParams* params = (ThreadParams*)args;
-    ConvertedStats* converted = malloc(sizeof(ConvertedStats) + sizeof(float) * (unsigned long) params -> printer -> proc);
-    struct timespec sleepTime;
+    params = (ThreadParams*)args;
+    converted = malloc(sizeof(ConvertedStats) + sizeof(float) * (unsigned long) params -> printer -> proc);
 
     if (converted == NULL) {
         pthread_exit(NULL);

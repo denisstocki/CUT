@@ -4,10 +4,12 @@
     PURPOSE: implementation of watchdog module
 */
 
-#include <pthread.h>    
+#include <pthread.h>   
+#include <stdio.h> 
 #include <stdlib.h>     
 #include <string.h>     
 #include <stdbool.h>     
+#include <unistd.h>
 #include <time.h>       
 #include <sys/time.h>   
 #include "../enums/enums.h"
@@ -57,9 +59,11 @@ int Watchdog_start(
     Watchdog* watchdog,
     volatile sig_atomic_t* status
 ) {
+    ThreadParams* params;
+
     if (watchdog == NULL || *status != RUNNING) { return ERR_PARAMS; }
     
-    ThreadParams* params = (ThreadParams*) malloc(sizeof(ThreadParams));
+    params = (ThreadParams*) malloc(sizeof(ThreadParams));
 
     if (params == NULL) { return ERR_ALLOC; }
 
@@ -78,8 +82,11 @@ int Watchdog_start(
 static void* Watchdog_watch(
     void* const args
 ) {
-    ThreadParams* params = (ThreadParams*) args;
-    bool notified = false;
+    ThreadParams* params;
+    bool notified;
+
+    params = (ThreadParams*) args;
+    notified = false;
 
     while (*(params -> status) == RUNNING) {
         sleep(2);
@@ -95,7 +102,7 @@ static void* Watchdog_watch(
         }
     }
 
-    Logger_log("READER", "THREAD FUNCTION FINISHED");
+    // Logger_log("READER", "THREAD FUNCTION FINISHED");
 
     free(params);
     pthread_exit(NULL);
