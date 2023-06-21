@@ -4,72 +4,90 @@
     PURPOSE: implementation of logger module
 */
 
+// INCLUDES OF OUTSIDE LIBRARIES
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
 #include <stdbool.h>
 #include <string.h>
+
+// INCLUDES OF INSIDE LIBRARIES
 #include "../buffer/buffer.h"
 #include "../enums/enums.h"
 #include "logger.h"
 
+// DEFINITIONS OF MACRO
 #define PATH "log.txt"
 
-typedef struct {
+// STRUCTURE FOR HOLDING LOGGER SINGLETON OBJECT
+typedef struct logger {
     pthread_t thread;
     Buffer* buffer;
     FILE* file;
 } Logger;
 
+// STRUCTURE FOR HOLDING THREAD FUNCTION'S PARAMETERS
 typedef struct {
     volatile sig_atomic_t* status;
 } ThreadParams;
 
-static bool started = false;
+// STATIC GLOBAL VARIABLES
 static bool initialized = false;
 static bool joined = false;
+static bool started = false;
+static Logger* logger;
 
-static void* Logger_threadf(void* arg);
+// PROTOTYPE FUNCTIONS DECLARATIONS
+static void* Logger_threadf(void* const);
 
-static Logger* Logger_instance(
-
+/*
+    METHOD: Logger_init
+    ARGUMENTS: 
+        buffer - buffer object to work on in the function
+    PURPOSE: creation of Logger object
+    RETURN: int from enums, explaining result
+*/
+int Logger_init(
+    Buffer* const buffer
 ) {
-    static Logger logger;
+    FILE* file;
 
-    if (!initialized) {
-        logger.buffer = Buffer_init(sizeof(char) * 256, 100);
+    if (initialized || buffer == NULL) { return ERR_INIT; }
 
-        if (logger.buffer == NULL) { return NULL; }
+    file = fopen(PATH, "w");
+    if (file == NULL) { return ERR_FILE_OPEN; }
 
-        logger.file = fopen(PATH, "w");
+    logger = (Logger*) malloc(sizeof(Logger));
 
-        if (logger.file == NULL) { return NULL; }
-        
-        initialized = true;
-
-        Logger_log("LOGGER", "LOGGINING STARTED");
+    if (logger == NULL) { 
+        fclose(file);
+        return ERR_ALLOC; 
     }
-
-    return &logger;
-}
-
-int Logger_init() {
-    if (initialized) { return ERR_INIT; }
     
-    Logger* logger = Logger_instance();
+    *logger = (Logger) {
+        .buffer = buffer,
+        .file = file
+    };
 
-    if (logger == NULL) { return ERR_ALLOC; }
+    initialized = true;
     
     return SUCCESS;
 }
 
-int Logger_join() {
+/*
+    METHOD: Logger_join
+    ARGUMENTS: none
+    PURPOSE: joining Logger's thread to parent's thread
+    RETURN: int from enums, explaining result
+*/
+int Logger_join(
+    void
+) {
     if (joined) { return ERR_JOIN; }
 
-    Logger* logger = Logger_instance();
-
     if (pthread_join(logger -> thread, NULL) != 0) {
-        free(logger -> buffer);
+        fclose(logger -> file);
+        free(logger);
         return ERR_JOIN;
     }
 
@@ -78,21 +96,31 @@ int Logger_join() {
     return SUCCESS;
 }
 
+/*
+    METHOD: Logger_start
+    ARGUMENTS: 
+        status - an address to a tracker's status variable
+    PURPOSE: start of Logger's thread and thread function
+    RETURN: int from enums, explaining result
+*/
 int Logger_start(
     volatile sig_atomic_t* status
 ) {
+    ThreadParams* params;
+
     if (started) { return ERR_RUN; }
     
-    Logger* logger = Logger_instance();
-    ThreadParams* params = (ThreadParams*)malloc(sizeof(ThreadParams));
+    params = (ThreadParams*)malloc(sizeof(ThreadParams));
 
+    if (params == NULL) { return ERR_ALLOC; }
 
     *params = (ThreadParams) {
         .status = status
     };
 
     if (pthread_create(&(logger -> thread), NULL, Logger_threadf, (void*) params) != 0) {
-        Buffer_destroy(logger -> buffer);
+        fclose(logger -> file);
+        free(logger);
         return ERR_CREATE; 
     }
     
@@ -101,9 +129,60 @@ int Logger_start(
     return SUCCESS;
 }
 
-int Logger_log(char* name, char* info) {
-    Logger* logger = Logger_instance();
+/*
+    METHOD: Logger_threadf
+    ARGUMENTS: 
+        args - arguments passed by Logger_start function
+    PURPOSE: completing Logger thread duties
+    RETURN: pointer
+*/
+static void* Logger_threadf(
+    void* const args
+) {
+    ThreadParams* params;
+    struct timespec sleepTime;
+    char* message;
+
+    params = (ThreadParams*) args;
+    message = malloc(sizeof(char) * 256);
+
+    if (message == NULL) {pthread_exit(NULL); }
+
+    while (*(params -> status) == RUNNING) {
+        if (Buffer_pop(logger -> buffer, message) != SUCCESS) {
+            break;
+        }
+
+        fprintf(logger -> file, "%s\n", message);
+        fflush(logger -> file);
+
+        sleepTime.tv_sec = 1;
+        sleepTime.tv_nsec = 0;
+
+        nanosleep(&sleepTime, NULL);
+    }
+    
+    free(message);
+    free(params);
+
+    pthread_exit(NULL);
+}
+
+/*
+    METHOD: Logger_log
+    ARGUMENTS: 
+        name - name of a module which invoked this function
+        info - content of a message sent to logger
+    PURPOSE: appearance of a single log in log.txt
+    RETURN: int from enums, explaining result
+*/
+int Logger_log(
+    char* const name, 
+    char* const info
+) {
     char message[256];
+
+    if (name == NULL || info == NULL) { return ERR_PARAMS; }
 
     snprintf(message, sizeof(message), "[%s]: %s", name, info);
 
@@ -114,34 +193,15 @@ int Logger_log(char* name, char* info) {
     return SUCCESS;
 }
 
-void Logger_destroy() {
-    Logger* logger = Logger_instance();
-
+/*
+    METHOD: Logger_destroy
+    ARGUMENTS: none
+    PURPOSE: free of memory taken by Logger object
+    RETURN: nothing
+*/
+void Logger_destroy(
+    void
+) {
     fclose(logger -> file);
+    free(logger);
 }
-
-static void* Logger_threadf(void* arg) {
-    ThreadParams* params = (ThreadParams*) arg;
-    struct timespec sleepTime;
-    Logger* logger = Logger_instance();
-    char* text = malloc(sizeof(char) * 256);
-
-    while (*(params -> status) == RUNNING) {
-        if (Buffer_pop(logger -> buffer, text) != SUCCESS) {
-            break;
-        }
-
-        fprintf(logger -> file, "%s\n", text);
-        fflush(logger -> file);
-
-        sleepTime.tv_sec = 1;
-        sleepTime.tv_nsec = 0;
-        nanosleep(&sleepTime, NULL);
-    }
-    
-    free(text);
-    free(params);
-
-    pthread_exit(NULL);
-}
-
