@@ -134,7 +134,7 @@ int Buffer_pop(
     return SUCCESS;
 }
 
-void Buffer_free(
+void Buffer_destroy(
     Buffer* buffer
 ) {
     if (buffer == NULL) { return; }

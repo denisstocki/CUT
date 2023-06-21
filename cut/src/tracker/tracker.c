@@ -47,6 +47,7 @@ Tracker* Tracker_init(
     Tracker* tracker;
     Buffer* bufferRA;
     Buffer* bufferAP;
+    Buffer* bufferL;
     Reader* reader;
     Analyzer* analyzer;
     Printer* printer;
@@ -55,7 +56,11 @@ Tracker* Tracker_init(
     tracker = (Tracker*) malloc(sizeof(Tracker));
 
     if (tracker == NULL) { return NULL; }
-    if (Logger_init() != SUCCESS) { goto err_logger_init; }
+
+    bufferL = Buffer_init(sizeof(char) * 256, 100);
+    if (bufferL == NULL) { goto err_bufferL_init; }
+
+    if (Logger_init(bufferL) != SUCCESS) { goto err_logger_init; }
 
     proc = sysconf(_SC_NPROCESSORS_ONLN);
     if (proc <= 0) { goto err_proc_load; }
@@ -81,6 +86,7 @@ Tracker* Tracker_init(
         .analyzer = analyzer,
         .bufferAP = bufferAP,
         .printer = printer,
+        .bufferL = bufferL,
         .status = ATOMIC_VAR_INIT(CREATED)
     };
 
@@ -97,6 +103,8 @@ Tracker* Tracker_init(
     err_proc_load:
         Logger_destroy();
     err_logger_init:
+        Buffer_destroy(bufferL);
+    err_bufferL_init:
         free(tracker);
 
     printf("[TRACKER]: MEMORY ALLOCATION ERROR\n");
@@ -107,7 +115,7 @@ Tracker* Tracker_init(
 /*
     METHOD: Tracker_start
     ARGUMENTS:
-        tracker - reference to an object which is Tracker_start function going to work on
+        tracker - reference to an object which Tracker_start function is going to work on
     PURPOSE: start of whole Tracker object's thread work
     RETURN: enums integer value
 */
@@ -124,6 +132,7 @@ int Tracker_start(
     Logger_log("TRACKER", "STARTING LOGGER");
 
     if (Logger_start(&(tracker -> status)) != SUCCESS) {
+        printf("[TRACKER]: ERROR WHEN STARTING LOGGER\n");
         Tracker_destroy(tracker);
         return ERR_RUN;
     }
@@ -192,8 +201,8 @@ int Tracker_start(
 /*
     METHOD: Tracker_terminate
     ARGUMENTS: 
-        tracker
-    PURPOSE: sets status on a given tracker to a TERMINATED status if possible
+        tracker - reference to an object which Tracker_terminate function is going to work on
+    PURPOSE: sets status on a given tracker to TERMINATED if possible
     RETURN: nothing
 */
 int Tracker_terminate(
@@ -213,41 +222,42 @@ int Tracker_terminate(
 
 /*
     METHOD: Tracker_destroy
-    PURPOSE: frees reserved memory for a given Tracker 'object' and its nested 'objects'
+    ARGUMENTS: 
+        tracker - reference to an object which Tracker_destroy function is going to work on
+    PURPOSE: frees reserved memory for a given Tracker object and its nested objects
     RETURN: nothing
 */
 void Tracker_destroy(
-    Tracker* tracker
+    Tracker* const tracker
 ) {
+    ProcessorStats popRA;
+    ConvertedStats popAP;
+
     printf("[TRACKER]: DESTROY STARTED\n");
 
     if (tracker == NULL) { return; }
-
-    ProcessorStats trasher1;
-    ConvertedStats trasher2;
     
-    printf("[TRACKER]: DESTROING BUFFER R-A INCLUDE\n");
+    printf("[TRACKER]: POPPING BUFFER R-A ELEMENTS\n");
 
     while(!Buffer_isEmpty(tracker -> bufferRA)) {
-        Buffer_pop(tracker -> bufferRA, &trasher1);
-        free(trasher1.cores);
+        Buffer_pop(tracker -> bufferRA, &popRA);
+        free(popRA.cores);
     }
 
-    printf("[TRACKER]: DESTROING BUFFER A-P INCLUDE\n");
+    printf("[TRACKER]: POPPING BUFFER A-P ELEMENTS\n");
 
     while(!Buffer_isEmpty(tracker -> bufferAP)) {
-        Buffer_pop(tracker -> bufferAP, &trasher2);
-        free(trasher2.percentages);
+        Buffer_pop(tracker -> bufferAP, &popAP);
+        free(popAP.percentages);
     }
     
     Reader_destroy(tracker -> reader);
     Analyzer_destroy(tracker -> analyzer);
     Printer_destroy(tracker -> printer);
     Logger_destroy();
-    Buffer_free(tracker -> bufferRA);
-    Buffer_free(tracker -> bufferAP);
-
-    tracker -> status = 0;
+    Buffer_destroy(tracker -> bufferRA);
+    Buffer_destroy(tracker -> bufferAP);
+    Buffer_destroy(tracker -> bufferL);
 
     free(tracker);
 

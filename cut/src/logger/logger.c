@@ -92,7 +92,7 @@ int Logger_start(
     };
 
     if (pthread_create(&(logger -> thread), NULL, Logger_threadf, (void*) params) != 0) {
-        Buffer_free(logger -> buffer);
+        Buffer_destroy(logger -> buffer);
         return ERR_CREATE; 
     }
     
