@@ -162,7 +162,6 @@ static void* Reader_threadf(
 ) {
     ThreadParams* params;
     ProcessorStats stats;
-    struct timespec timebreak;
 
     Logger_log("READER", "THREAD FUNCTION STARTED");
 
@@ -194,10 +193,7 @@ static void* Reader_threadf(
             break;
         }
 
-        timebreak.tv_sec = 1;
-        timebreak.tv_nsec = 0;
-
-        nanosleep(&timebreak, NULL);
+        sleep(1);
     }
 
     Logger_log("READER", "JOINING WATCHDOG THREAD");

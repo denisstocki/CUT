@@ -10,6 +10,7 @@
 #include <pthread.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <unistd.h>
 
 // INCLUDES OF INSIDE LIBRARIES
 #include "../inc/printer.h"
@@ -166,7 +167,6 @@ static void* Printer_threadf(
 ) {
     ThreadParams* params;
     ConvertedStats* converted;
-    struct timespec timebreak;
 
     Logger_log("PRINTER", "THREAD FUNCTION STARTED");
 
@@ -191,10 +191,7 @@ static void* Printer_threadf(
         
         free(converted -> percentages);
         
-        timebreak.tv_sec = 1;
-        timebreak.tv_nsec = 0;
-
-        nanosleep(&timebreak, NULL);
+        sleep(1);
     }
 
     Watchdog_join(params -> printer -> watchdog);

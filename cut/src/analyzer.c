@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <stdbool.h>
+#include <unistd.h>
 
 // INCLUDES OF INSIDE LIBRARIES
 #include "../inc/analyzer.h"
@@ -186,7 +187,6 @@ static void* Analyzer_threadf(
     ThreadParams* params;
     ProcessorStats* stats;
     ConvertedStats converted;
-    struct timespec timebreak;
 
     Logger_log("ANALYZER", "THREAD FUNCTION STARTED");
 
@@ -217,10 +217,7 @@ static void* Analyzer_threadf(
 
         free(stats -> cores);
         
-        timebreak.tv_sec = 1;
-        timebreak.tv_nsec = 0;
-
-        nanosleep(&timebreak, NULL);
+        sleep(1);
     }
 
     Watchdog_join(params -> analyzer -> watchdog);
