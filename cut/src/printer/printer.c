@@ -27,13 +27,14 @@ struct printer {
     pthread_t thread;
     uint8_t proc;
     bool thread_started;
-    char padding[7];
+    char padding[6];
 };
 
 // STRUCTURE FOR HOLDING THREADPARAMS
 typedef struct ThreadParams {
     Printer* printer;
     volatile sig_atomic_t* status;
+    atomic_flag* status_watch;
 } ThreadParams;
 
 // DECLARATIONS OF PROTOTYPE FUNCTIONS
@@ -70,7 +71,7 @@ Printer* Printer_init(
 
     if (notifier == NULL) { return NULL; }
 
-    watchdog = Watchdog_init(notifier, "READER");
+    watchdog = Watchdog_init(notifier, "PRINTER");
 
     if (watchdog == NULL) { return NULL; }
     
@@ -97,7 +98,8 @@ Printer* Printer_init(
 */
 int Printer_start(
     Printer* const printer,
-    volatile sig_atomic_t* status
+    volatile sig_atomic_t* status,
+    atomic_flag* status_watch
 ) {
     ThreadParams* params;
 
@@ -114,7 +116,8 @@ int Printer_start(
 
     *params = (ThreadParams) {
         .printer = printer,
-        .status = status
+        .status = status,
+        .status_watch = status_watch
     };
 
     if (pthread_create(&(printer -> thread), NULL, Printer_threadf, (void*) params) != 0) {
@@ -174,7 +177,7 @@ static void* Printer_threadf(
         pthread_exit(NULL);
     } 
 
-    Watchdog_start(params -> printer -> watchdog, params -> status);
+    Watchdog_start(params -> printer -> watchdog, params -> status, params -> status_watch);
 
     while (*(params -> status) == RUNNING) {
         if (Buffer_pop(params -> printer -> bufferAP, converted) != OK) {
@@ -220,21 +223,22 @@ static void Printer_print(
     
     printf("\033[H\033[J");
 
-    printf("### CPU ULTRA TRACKING ###\n");
+    printf("================ TRACKER ================\n\n");
 
-    printf("total: ");
+    printf("cpu:   ");
 
     Printer_toScreen(convertedStats -> percentages_average);
 
     printf("\n");
 
     for(uint8_t i = 0; i < convertedStats -> count; i++) {
-        printf("cpu %d: ", i);
+        printf("cpu%d:  ", i);
         Printer_toScreen(convertedStats -> percentages[i]);
         printf("\n");
     }
 
     printf("\n");
+    printf("================ TRACKER ================\n");
 
     Logger_log("PRINTER", "PRINT FINISHED");
 }
@@ -251,16 +255,16 @@ static void Printer_toScreen(
 ) {
     int progress;
 
-    progress = (int)(percentage / 10.0f);
+    progress = (int)(percentage / 4.0f);
     
     Logger_log("PRINTER", "TOSCREEN STARTED");
     
     printf("[");
 
     for(int i = 0; i < progress; i++)
-        printf("%s", "*");
+        printf("%s", "#");
 
-    for(int i = progress; i < 10; i++)
+    for(int i = progress; i < 25; i++)
         printf(" ");
 
     printf("] %0.2f%%", (double)percentage);

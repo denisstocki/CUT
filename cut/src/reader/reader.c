@@ -10,6 +10,7 @@
 #include <pthread.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <unistd.h>
 
 // INCLUDES OF INSIDE LIBRARIES
 #include "reader.h"
@@ -33,12 +34,14 @@ struct reader {
     Buffer* buffer;
     pthread_t thread;
     uint8_t proc;
+    char padding[7];
 };
 
 // STRUCTURE FOR HOLDING PARAMS PASSED TO READER THREAD FUNCTION
 typedef struct ThreadParams {
     Reader* reader;
     volatile sig_atomic_t* status;
+    atomic_flag* status_watch;
 } ThreadParams;
 
 /*
@@ -96,7 +99,8 @@ Reader* Reader_init(
 */
 int Reader_start(
     Reader* const reader,
-    volatile sig_atomic_t* status
+    volatile sig_atomic_t* status,
+    atomic_flag* status_watch
 ) {
     ThreadParams* params;
 
@@ -113,7 +117,8 @@ int Reader_start(
 
     *params = (ThreadParams) {
         .reader = reader,
-        .status = status
+        .status = status,
+        .status_watch = status_watch
     };
 
     if (pthread_create(&(reader -> thread), NULL, Reader_threadf, (void*) params) != 0) {
@@ -165,7 +170,7 @@ static void* Reader_threadf(
 
     Logger_log("READER", "STARTING WATCHDOG THREAD");
 
-    if (Watchdog_start(params -> reader -> watchdog, params -> status) != OK) {
+    if (Watchdog_start(params -> reader -> watchdog, params -> status, params -> status_watch) != OK) {
         Logger_log("READER", "COULD NOT START WATCHDOG THREAD");
         free(params);
         pthread_exit(NULL);
@@ -219,7 +224,7 @@ int Reader_read(
     const uint8_t proc
 ) {
     FILE* file;
-    int coreCount;
+    uint8_t coreCount;
 
     Logger_log("READER", "READ STARTED");
 

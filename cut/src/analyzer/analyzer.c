@@ -37,12 +37,14 @@ struct analyzer {
     uint8_t proc;
     bool thread_started;
     bool prev_analyzed;
+    char padding[5];
 };
 
 // STRUCTURE FOR HOLDING PARAMS PASSED TO READER THREAD FUNCTION
 typedef struct ThreadParams {
     Analyzer* analyzer;
     volatile sig_atomic_t* status;
+    atomic_flag* status_watch;
 } ThreadParams;
 
 /*
@@ -115,7 +117,8 @@ Analyzer* Analyzer_init(
 */
 int Analyzer_start(
     Analyzer* const analyzer,
-    volatile sig_atomic_t* status
+    volatile sig_atomic_t* status,
+    atomic_flag* status_watch
 ) {
     ThreadParams* params;
 
@@ -132,7 +135,8 @@ int Analyzer_start(
 
     *params = (ThreadParams) {
         .analyzer = analyzer,
-        .status = status
+        .status = status,
+        .status_watch = status_watch
     };
 
     if (pthread_create(&(analyzer -> thread), NULL, Analyzer_threadf, (void*) params) != 0) {
@@ -193,7 +197,7 @@ static void* Analyzer_threadf(
         pthread_exit(NULL);
     } 
 
-    Watchdog_start(params -> analyzer -> watchdog, params -> status);
+    Watchdog_start(params -> analyzer -> watchdog, params -> status, params -> status_watch);
 
     while (*(params -> status) == RUNNING) {
         if (Buffer_pop(params -> analyzer -> bufferRA, stats) != OK) {
@@ -243,8 +247,8 @@ static int Analyzer_analyze(
     ProcessorStats* processorStats,
     ConvertedStats* convertedStats
 ) {
-    long idle;
-    long non_idle;
+    uint64_t idle;
+    uint64_t non_idle;
 
     Logger_log("ANALYZER", "ANALYZE STARTED");
 
@@ -257,7 +261,7 @@ static int Analyzer_analyze(
     }
 
     if (!analyzer -> prev_analyzed) {
-        analyzer -> cores_total_prev = malloc(sizeof(long) * analyzer -> proc);
+        analyzer -> cores_total_prev = malloc(sizeof(uint64_t) * analyzer -> proc);
 
         if (analyzer -> cores_total_prev == NULL) { return ERR_ALLOC; }
         

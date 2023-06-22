@@ -31,6 +31,7 @@ struct watchdog {
 typedef struct ThreadParams {
     Watchdog* watchdog;
     volatile sig_atomic_t* status;
+    atomic_flag* status_watch;
 } ThreadParams;
 
 // DECLARATIONS OF PROTOTYPE FUNCTIONS
@@ -50,9 +51,15 @@ Watchdog* Watchdog_init(
     char* const name
 ) {
     Watchdog* watchdog;
-    char mixed_name[20];
+    size_t mixed_name_length;
+    char* mixed_name;
+    
+    mixed_name_length = strlen("WATCHDOG-") + strlen(name) + 1;
+    mixed_name = (char*) malloc(mixed_name_length);
 
-    snprintf(mixed_name, sizeof(mixed_name), "WATCHDOG:%s", name);
+    if (mixed_name == NULL) { return NULL; }
+
+    snprintf(mixed_name, mixed_name_length, "WATCHDOG-%s", name);
 
     Logger_log(mixed_name, "INIT STARTED");
 
@@ -82,7 +89,8 @@ Watchdog* Watchdog_init(
 */
 int Watchdog_start(
     Watchdog* watchdog,
-    volatile sig_atomic_t* status
+    volatile sig_atomic_t* status,
+    atomic_flag* status_watch
 ) {
     ThreadParams* params;
 
@@ -96,7 +104,8 @@ int Watchdog_start(
 
     *params = (ThreadParams) {
         .watchdog = watchdog,
-        .status = status
+        .status = status,
+        .status_watch = status_watch
     };
 
     if (pthread_create(&(watchdog -> thread), NULL, Watchdog_watch, (void*) params) != 0) {
@@ -126,9 +135,9 @@ static void* Watchdog_watch(
 
     Logger_log(params -> watchdog -> name, "WATCH STARTED");
 
-    while (*(params -> status) == RUNNING) {
-        sleep(2);
+    sleep(2);
 
+    while (*(params -> status) == RUNNING) {
         Logger_log(params -> watchdog -> name, "CHECKING NOTIFIER");
 
         if (Notifier_check(params -> watchdog -> notifier, &notified) != OK) {
@@ -136,13 +145,17 @@ static void* Watchdog_watch(
             pthread_exit(NULL);
         }
 
-        if (!notified) {
+        if (!notified && *(params -> status) == RUNNING) {
             Logger_log(params -> watchdog -> name, "NOT NOTIFIED");
-            *params -> status = TERMINATED;
-            break;
-        }
 
-        Logger_log(params -> watchdog -> name, "NOTFIED");
+            if (!atomic_flag_test_and_set(params -> status_watch)) {
+                *params -> status = TERMINATED;
+                break;
+            }
+        } else {
+            Logger_log(params -> watchdog -> name, "NOTIFIED");
+            sleep(2);
+        }
     }
 
     Logger_log(params -> watchdog -> name, "WATCH FINISHED");
@@ -188,5 +201,6 @@ void Watchdog_destroy(
 
     Logger_log(watchdog -> name, "DESTROY FINISHED");
 
+    free(watchdog -> name);
     free(watchdog);
 }

@@ -32,7 +32,8 @@ struct tracker {
     Analyzer* analyzer;
     Printer* printer;
     volatile sig_atomic_t status;
-    char padding[4];
+    atomic_flag status_watch;
+    char padding[3];
 };
 
 /*
@@ -83,7 +84,8 @@ Tracker* Tracker_init(
         .analyzer = analyzer,
         .bufferAP = bufferAP,
         .printer = printer,
-        .status = ATOMIC_VAR_INIT(CREATED)
+        .status = ATOMIC_VAR_INIT(CREATED),
+        .status_watch = ATOMIC_FLAG_INIT
     };
 
     Logger_log("TRACKER", "INIT FINISHED");
@@ -125,7 +127,7 @@ int Tracker_start(
 
     Logger_log("TRACKER", "STARTING READER");
 
-    if (Reader_start(tracker -> reader, &(tracker -> status)) != OK) {
+    if (Reader_start(tracker -> reader, &(tracker -> status), &(tracker -> status_watch)) != OK) {
         Logger_log("TRACKER", "ERROR WHEN STARTING READER");
         Tracker_destroy(tracker);
         return ERR_RUN;
@@ -133,7 +135,7 @@ int Tracker_start(
 
     Logger_log("TRACKER", "STARTING ANALYZER");
 
-    if (Analyzer_start(tracker -> analyzer, &(tracker -> status)) != OK) {
+    if (Analyzer_start(tracker -> analyzer, &(tracker -> status), &(tracker -> status_watch)) != OK) {
         Logger_log("TRACKER", "ERROR WHEN STARTING ANALYZER");
         Tracker_destroy(tracker);
         return ERR_RUN;
@@ -141,7 +143,7 @@ int Tracker_start(
 
     Logger_log("TRACKER", "STARTING PRINTER");
 
-    if (Printer_start(tracker -> printer, &(tracker -> status)) != OK) {
+    if (Printer_start(tracker -> printer, &(tracker -> status), &(tracker -> status_watch)) != OK) {
         Logger_log("TRACKER", "ERROR WHEN STARTING PRINTER");
         Tracker_destroy(tracker);
         return ERR_RUN;
