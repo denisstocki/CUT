@@ -1,0 +1,36 @@
+======================
+AUTHOR: Denis Stocki
+======================
+DIRECTORIES DESCRIPTION:
+    cut - holds all directories
+    cut/app - holds main.c programme
+    cut/inc - holds all include files
+    cut/src - holds all programme files
+    cut/tests - holds all files required to run tests
+======================
+USAGE:
+
+Available targets:
+    make all - compiles all files required for programme run
+    make test - compiles all file required for tests run
+    make clean - cleans all compiled files, including tests compiled files and log.txt
+
+How to start main programme:
+    1. cd cut
+    2. make all
+    3. ./main.out
+    4. (OPTIONAL) valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes ./main.out
+
+How to stop main programme:
+    1. CTRL + C
+
+How to start tests programme:
+    1. cd cut
+    2. make test
+    3. ./tests/test.out
+    4. (OPTIONAL) valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes ./tests/test.out
+
+How to clean everything that was generated:
+    1. cd cut
+    2. make clean
+=====================
