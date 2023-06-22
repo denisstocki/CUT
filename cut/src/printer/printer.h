@@ -7,19 +7,19 @@
 #ifndef PRINTER_H
 #define PRINTER_H
 
-// OUTSIDE LIBRARIES
+// INCLUDES OF OUTSIDE LIBRARIES
 #include <signal.h>
 
-// INSIDE LIBRARIES
+// INCLUDES OF INSIDE LIBRARIES
 #include "../buffer/buffer.h"
 
-// Usage of pseudo objective 
-// encapsulation on struct printer.
+// ENCAPSULATION ON PRINTER OBJECT
 typedef struct printer Printer;
 
-Printer* Printer_init(Buffer* const, long const);
+// DECLARATIONS OF PROTOTYPE FUNCTIONS
+Printer* Printer_init(Buffer* const, uint8_t const);
 int Printer_start(Printer* const, volatile sig_atomic_t*);
 int Printer_join(Printer* const);
-void Printer_destroy(Printer* const);
+void Printer_destroy(Printer*);
 
 #endif 

@@ -4,10 +4,14 @@
     PURPOSE: implementation of printer module
 */
 
+// INCLUDES OF OUTSIDE LIBRARIES
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
 #include <stdbool.h>
+#include <stdint.h>
+
+// INCLUDES OF INSIDE LIBRARIES
 #include "printer.h"
 #include "../enums/enums.h"
 #include "../watchdog/watchdog.h"
@@ -15,35 +19,40 @@
 #include "../notifier/notifier.h"
 #include "../stats/stats.h"
 
+// STRUCTURE FOR HOLDING PRINTER OBJECT
 struct printer {
     Watchdog* watchdog;
     Notifier* notifier;
     Buffer* bufferAP;
     pthread_t thread;
-    long proc;
+    uint8_t proc;
     bool thread_started;
     char padding[7];
 };
 
-// STRUCTURE FOR HOLDING PARAMS PASSED TO READER THREAD FUNCTION
+// STRUCTURE FOR HOLDING THREADPARAMS
 typedef struct ThreadParams {
     Printer* printer;
     volatile sig_atomic_t* status;
 } ThreadParams;
 
-static void* Printer_threadf(void* args);
-static void Printer_print(ConvertedStats*);
-static void Printer_toScreen(float);
+// DECLARATIONS OF PROTOTYPE FUNCTIONS
+static void* Printer_threadf(void* const);
+static void Printer_print(ConvertedStats* const);
+static void Printer_toScreen(float const);
 
 /*
     METHOD: Printer_init
-    PURPOSE: creation of Printer 'object'
-    RETURN: Printer 'object' or NULL in 
+    ARGUMENTS:
+        bufferAP - an object of Analyzer-Printer buffer
+        proc - a value of computer's core count
+    PURPOSE: creation of Printer object
+    RETURN: Printer object or NULL in 
         case creation was not possible 
 */
 Printer* Printer_init(
     Buffer* bufferAP,
-    long proc
+    uint8_t proc
 ) {
     Watchdog* watchdog;
     Notifier* notifier;
@@ -78,6 +87,14 @@ Printer* Printer_init(
     return printer;
 }
 
+/*
+    METHOD: Printer_start
+    ARGUMENTS:
+        printer - a Printer object to work on
+        status - tracker's object status variable
+    PURPOSE: start of a given printer object's thread
+    RETURN: enum integer value
+*/
 int Printer_start(
     Printer* const printer,
     volatile sig_atomic_t* status
@@ -108,9 +125,16 @@ int Printer_start(
 
     Logger_log("PRINTER", "START FINISHED");
 
-    return SUCCESS;
+    return OK;
 }
 
+/*
+    METHOD: Printer_join
+    ARGUMENTS:
+        printer - a Printer object to work on
+    PURPOSE: join of a given printer object's thread
+    RETURN: enum integer value
+*/
 int Printer_join(
     Printer* const printer
 ) {
@@ -124,20 +148,27 @@ int Printer_join(
 
     Logger_log("PRINTER", "JOIN FINISHED");
 
-    return SUCCESS;
+    return OK;
 }
 
+/*
+    METHOD: Printer_threadf
+    ARGUMENTS:
+        args - a pointer to function's parameters
+    PURPOSE: acomplishing printer thread's work
+    RETURN: nothing
+*/
 static void* Printer_threadf(
-    void* args
+    void* const args
 ) {
     ThreadParams* params;
     ConvertedStats* converted;
-    struct timespec sleepTime;
+    struct timespec timebreak;
 
     Logger_log("PRINTER", "THREAD FUNCTION STARTED");
 
     params = (ThreadParams*)args;
-    converted = malloc(sizeof(ConvertedStats) + sizeof(float) * (unsigned long) params -> printer -> proc);
+    converted = malloc(sizeof(ConvertedStats) + sizeof(float) * params -> printer -> proc);
 
     if (converted == NULL) {
         pthread_exit(NULL);
@@ -146,7 +177,7 @@ static void* Printer_threadf(
     Watchdog_start(params -> printer -> watchdog, params -> status);
 
     while (*(params -> status) == RUNNING) {
-        if (Buffer_pop(params -> printer -> bufferAP, converted) != SUCCESS) {
+        if (Buffer_pop(params -> printer -> bufferAP, converted) != OK) {
             free(converted);
             break;
         }
@@ -157,10 +188,10 @@ static void* Printer_threadf(
         
         free(converted -> percentages);
         
-        sleepTime.tv_sec = 1;
-        sleepTime.tv_nsec = 0;
+        timebreak.tv_sec = 1;
+        timebreak.tv_nsec = 0;
 
-        nanosleep(&sleepTime, NULL);
+        nanosleep(&timebreak, NULL);
     }
 
     Watchdog_join(params -> printer -> watchdog);
@@ -173,10 +204,18 @@ static void* Printer_threadf(
     pthread_exit(NULL);
 }
 
+/*
+    METHOD: Printer_print
+    ARGUMENTS:
+        convertedStats - an object of convertedStats
+    PURPOSE: print of a given object to the screen
+    RETURN: nothing
+*/
 static void Printer_print(
     ConvertedStats* convertedStats
 ) {
     Logger_log("PRINTER", "PRINT STARTED");
+
     if (convertedStats == NULL) { return; }
     
     printf("\033[H\033[J");
@@ -185,26 +224,36 @@ static void Printer_print(
 
     printf("total: ");
 
-    Printer_toScreen(convertedStats -> average_percentage);
+    Printer_toScreen(convertedStats -> percentages_average);
 
     printf("\n");
 
-    for(int i = 0; i < convertedStats -> count; i++) {
+    for(uint8_t i = 0; i < convertedStats -> count; i++) {
         printf("cpu %d: ", i);
         Printer_toScreen(convertedStats -> percentages[i]);
         printf("\n");
     }
 
     printf("\n");
+
     Logger_log("PRINTER", "PRINT FINISHED");
 }
 
+/*
+    METHOD: Printer_toScreen
+    ARGUMENTS:
+        percentage - a percentage value to be visualised on the screen
+    PURPOSE: visualisation of a given percentage value on the screen
+    RETURN: nothing
+*/
 static void Printer_toScreen(
-    float percentage
+    float const percentage
 ) {
     int progress;
-    Logger_log("PRINTER", "TOSCREEN STARTED");
+
     progress = (int)(percentage / 10.0f);
+    
+    Logger_log("PRINTER", "TOSCREEN STARTED");
     
     printf("[");
 
@@ -215,13 +264,16 @@ static void Printer_toScreen(
         printf(" ");
 
     printf("] %0.2f%%", (double)percentage);
+
     Logger_log("PRINTER", "TOSCREEN FINISHED");
 }
 
 /*
     METHOD: Printer_free
-    PURPOSE: frees reserved memory for a given Printer 'object' and its nested 'objects'
-    RETURN: Printer 'object' or NULL in 
+    ARGUMENTS:
+        printer - a printer object to be freed
+    PURPOSE: frees reserved memory for a given Printer object and its nested objects
+    RETURN: Printer object or NULL in 
         case creation was not possible 
 */
 void Printer_destroy(

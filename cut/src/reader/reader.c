@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 // INCLUDES OF INSIDE LIBRARIES
 #include "reader.h"
@@ -22,7 +23,7 @@
 #define PATH "/proc/stat"
 
 // PROTOTYPE FUNCTIONS FOR INSIDE WORLD
-int Reader_read(ProcessorStats* const, const long);
+int Reader_read(ProcessorStats* const, const uint8_t);
 static void* Reader_threadf(void* const);
 
 // STRUCTURE FOR HOLDING READER OBJECT
@@ -31,7 +32,7 @@ struct reader {
     Notifier* notifier;
     Buffer* buffer;
     pthread_t thread;
-    long proc;
+    uint8_t proc;
 };
 
 // STRUCTURE FOR HOLDING PARAMS PASSED TO READER THREAD FUNCTION
@@ -50,7 +51,7 @@ typedef struct ThreadParams {
 */
 Reader* Reader_init(
     Buffer* const buffer,
-    const long proc
+    const uint8_t proc
 ) {
     Watchdog* watchdog;
     Notifier* notifier;
@@ -121,7 +122,7 @@ int Reader_start(
 
     Logger_log("READER", "START FINISHED");
 
-    return SUCCESS;
+    return OK;
 }
 
 /*
@@ -141,7 +142,7 @@ int Reader_join(
 
     Logger_log("READER", "JOIN FINISHED");
 
-    return SUCCESS;
+    return OK;
 }
 
 /*
@@ -164,25 +165,25 @@ static void* Reader_threadf(
 
     Logger_log("READER", "STARTING WATCHDOG THREAD");
 
-    if (Watchdog_start(params -> reader -> watchdog, params -> status) != SUCCESS) {
+    if (Watchdog_start(params -> reader -> watchdog, params -> status) != OK) {
         Logger_log("READER", "COULD NOT START WATCHDOG THREAD");
         free(params);
         pthread_exit(NULL);
     }
 
     while (*(params -> status) == RUNNING) {
-        if (Reader_read(&stats, params -> reader -> proc) != SUCCESS) {
+        if (Reader_read(&stats, params -> reader -> proc) != OK) {
             Logger_log("READER", "READ FAILED");
             break;
         }
         
-        if (Buffer_push(params -> reader -> buffer, &stats) != SUCCESS) {
+        if (Buffer_push(params -> reader -> buffer, &stats) != OK) {
             Logger_log("READER", "PUSH FAILED");
             free(stats.cores);
             break;
         }
 
-        if (Notifier_notify(params -> reader -> notifier) != SUCCESS) {
+        if (Notifier_notify(params -> reader -> notifier) != OK) {
             Logger_log("READER", "NOTIFY FAILED");
             free(stats.cores);
             break;
@@ -215,7 +216,7 @@ static void* Reader_threadf(
 */
 int Reader_read(
     ProcessorStats* const processorStats,
-    const long proc
+    const uint8_t proc
 ) {
     FILE* file;
     int coreCount;
@@ -230,23 +231,28 @@ int Reader_read(
         return ERR_FILE_OPEN; 
     }
 
+    Logger_log("READER", "READLINE STARTED");
+
     if (fscanf(
             file, 
             "cpu %d %d %d %d %d %d %d %d %*d %*d\n",
-            &(processorStats -> average.user), 
-            &(processorStats -> average.nice), 
-            &(processorStats -> average.system),
-            &(processorStats -> average.idle), 
-            &(processorStats -> average.iowait), 
-            &(processorStats -> average.irq), 
-            &(processorStats -> average.sortirq),
-            &(processorStats -> average.steal)
+            &(processorStats -> cores_average.user), 
+            &(processorStats -> cores_average.nice), 
+            &(processorStats -> cores_average.system),
+            &(processorStats -> cores_average.idle), 
+            &(processorStats -> cores_average.iowait), 
+            &(processorStats -> cores_average.irq), 
+            &(processorStats -> cores_average.sortirq),
+            &(processorStats -> cores_average.steal)
         ) != 8
     ) {
+        Logger_log("READER", "READLINE FAILED");
         return ERR_FILE_READ;
     }
 
-    processorStats -> cores = (CoreStats*) malloc(sizeof(CoreStats) * (unsigned long) proc);
+    Logger_log("READER", "READLINE FINISHED");
+
+    processorStats -> cores = (CoreStats*) malloc(sizeof(CoreStats) * proc);
 
     if (processorStats -> cores == NULL) {
         fclose(file);
@@ -256,6 +262,8 @@ int Reader_read(
     coreCount = 0;
 
     while (coreCount < proc) {
+        Logger_log("READER", "READLINE STARTED");
+
         if (fscanf(
                 file, 
                 "cpu%*d %d %d %d %d %d %d %d %d %*d %*d\n",
@@ -269,12 +277,15 @@ int Reader_read(
                 &(processorStats -> cores[coreCount].steal)
             ) != 8
         ) {
+            Logger_log("READER", "READLINE FAILED");
             fclose(file);
             free(processorStats -> cores);
             return ERR_FILE_READ;
         }
 
         coreCount++;
+
+        Logger_log("READER", "READLINE FINISHED");
     }
 
     fclose(file);
@@ -283,11 +294,13 @@ int Reader_read(
 
     Logger_log("READER", "READ FINISHED");
 
-    return SUCCESS; 
+    return OK; 
 }
 
 /*
     METHOD: Reader_destroy
+    ARGUMENTS:
+        reader - a Reader object to be freed
     PURPOSE: frees reserved memory for a given Reader 'object' and its nested 'objects'
     RETURN: Reader 'object' or NULL in 
         case creation was not possible 

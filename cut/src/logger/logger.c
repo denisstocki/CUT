@@ -39,8 +39,7 @@ static void* Logger_threadf(void* const);
 
 /*
     METHOD: Logger_init
-    ARGUMENTS: 
-        buffer - buffer object to work on in the function
+    ARGUMENTS: none
     PURPOSE: creation of Logger object
     RETURN: int from enums, explaining result
 */
@@ -76,7 +75,7 @@ int Logger_init(
 
     initialized = true;
     
-    return SUCCESS;
+    return OK;
 }
 
 /*
@@ -98,13 +97,12 @@ int Logger_join(
 
     joined = true;
 
-    return SUCCESS;
+    return OK;
 }
 
 /*
     METHOD: Logger_start
-    ARGUMENTS: 
-        status - an address to a tracker's status variable
+    ARGUMENTS: none
     PURPOSE: start of Logger's thread and thread function
     RETURN: int from enums, explaining result
 */
@@ -123,7 +121,7 @@ int Logger_start(
     
     started = true;
 
-    return SUCCESS;
+    return OK;
 }
 
 /*
@@ -145,7 +143,7 @@ static void* Logger_threadf(
     if (message == NULL) {pthread_exit(NULL); }
 
     while (logger -> status == RUNNING) {
-        if (Buffer_pop(logger -> buffer, message) != SUCCESS) {
+        if (Buffer_pop(logger -> buffer, message) != OK) {
             break;
         }
 
@@ -154,7 +152,7 @@ static void* Logger_threadf(
     }
 
     while (!Buffer_isEmpty(logger -> buffer)) {
-        if (Buffer_pop(logger -> buffer, message) != SUCCESS) {
+        if (Buffer_pop(logger -> buffer, message) != OK) {
             break;
         }
 
@@ -185,13 +183,19 @@ int Logger_log(
 
     snprintf(message, sizeof(message), "[%s]: %s", name, info);
 
-    if (Buffer_push(logger -> buffer, message) != SUCCESS) {
+    if (Buffer_push(logger -> buffer, message) != OK) {
         return ERR_PUSH;
     }
 
-    return SUCCESS;
+    return OK;
 }
 
+/*
+    METHOD: Logger_terminate
+    ARGUMENTS: none
+    PURPOSE: sets status variable to TERMINATED
+    RETURN: nothing
+*/
 void Logger_terminate(
     void
 ) {

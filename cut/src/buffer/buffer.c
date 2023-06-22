@@ -14,6 +14,7 @@
 // INCLUDES OF INSIDE LIBRARIES
 #include "../buffer/buffer.h"
 #include "../enums/enums.h"
+#include "../logger/logger.h"
 
 // STRUCTURE FOR HOLDING BUFFER OBJECT
 struct buffer {
@@ -43,6 +44,8 @@ Buffer* Buffer_init(
 ) {
     Buffer* buffer;
 
+    Logger_log("BUFFER", "INIT STARTED");
+
     if (size <= 0 || capacity <= 0) { return NULL; }
     
     buffer = (Buffer*) malloc(sizeof(Buffer) + (size * capacity));
@@ -59,6 +62,8 @@ Buffer* Buffer_init(
         .capacity = capacity,
         .size = size
     };
+
+    Logger_log("BUFFER", "INIT FINISHED");
 
     return buffer;
 }
@@ -107,6 +112,8 @@ int Buffer_push(
     Buffer* const buffer, 
     void* const element
 ) {
+    Logger_log("BUFFER", "PUSH STARTED");
+
     if (buffer == NULL || element == NULL) { return ERR_PARAMS; }
 
     pthread_mutex_lock(&buffer->mutex);
@@ -127,7 +134,9 @@ int Buffer_push(
     pthread_cond_signal(&(buffer -> can_consume));
     pthread_mutex_unlock(&(buffer -> mutex));
 
-    return SUCCESS;
+    Logger_log("BUFFER", "PUSH FINISHED");
+
+    return OK;
 }
 
 /*
@@ -142,6 +151,8 @@ int Buffer_pop(
     Buffer* const buffer, 
     void* element
 ) {
+    Logger_log("BUFFER", "POP STARTED");
+
     if (buffer == NULL || element == NULL) { return ERR_PARAMS; }
 
     pthread_mutex_lock(&(buffer -> mutex));
@@ -161,8 +172,10 @@ int Buffer_pop(
 
     pthread_cond_signal(&(buffer -> can_produce));
     pthread_mutex_unlock(&(buffer -> mutex));
+
+    Logger_log("BUFFER", "POP FINISHED");
     
-    return SUCCESS;
+    return OK;
 }
 
 /*
@@ -175,6 +188,8 @@ int Buffer_pop(
 void Buffer_destroy(
     Buffer* buffer
 ) {
+    Logger_log("BUFFER", "DESTROY STARTED");
+
     if (buffer == NULL) { return; }
 
     pthread_mutex_destroy(&(buffer -> mutex));
@@ -182,4 +197,6 @@ void Buffer_destroy(
     pthread_cond_destroy(&(buffer -> can_consume));
 
     free(buffer);
+
+    Logger_log("BUFFER", "DESTROY FINISHED");
 }

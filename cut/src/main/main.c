@@ -58,12 +58,12 @@ int main(
     signal(SIGINT, handle_signal);
     signal(SIGTERM, handle_signal);
 
-    if (Logger_init() != SUCCESS) {
+    if (Logger_init() != OK) {
         printf("[MAIN]: ERROR WHEN CREATING LOGGER\n");
         return -1;
     }
 
-    if (Logger_start() != SUCCESS) {
+    if (Logger_start() != OK) {
         printf("[MAIN]: ERROR WHEN STARTING LOGGER\n");
         Logger_destroy();
         return -1;
@@ -77,7 +77,7 @@ int main(
         Logger_log("MAIN", "ERROR WHEN CREATING TRACKER");
         Logger_terminate();
 
-        if (Logger_join() != SUCCESS) {
+        if (Logger_join() != OK) {
             printf("[MAIN]: ERROR WHEN JOINING LOGGER\n");
         }
 
@@ -86,14 +86,14 @@ int main(
         return -1; 
     }
 
-    if (Tracker_start(tracker) != SUCCESS) { 
+    if (Tracker_start(tracker) != OK) { 
         Logger_log("MAIN", "ERROR WHEN STARTING TRACKER");
 
         Tracker_destroy(tracker);
 
         Logger_terminate();
 
-        if (Logger_join() != SUCCESS) {
+        if (Logger_join() != OK) {
             printf("[MAIN]: ERROR WHEN JOINING LOGGER\n");
         }
 
@@ -109,7 +109,7 @@ int main(
     Logger_log("MAIN", "PROGRAMME FINISHED");
     Logger_terminate();
 
-    if (Logger_join() != SUCCESS) {
+    if (Logger_join() != OK) {
         printf("[MAIN]: ERROR WHEN JOINING LOGGER\n");
         Logger_destroy();
         return -1;

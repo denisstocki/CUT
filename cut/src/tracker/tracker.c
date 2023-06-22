@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <time.h>
 
 // INCLUDES OF INSIDE LIBRARIES
@@ -50,7 +51,7 @@ Tracker* Tracker_init(
     Reader* reader;
     Analyzer* analyzer;
     Printer* printer;
-    long proc;
+    uint8_t proc;
 
     Logger_log("TRACKER", "INIT STARTED");
 
@@ -58,16 +59,16 @@ Tracker* Tracker_init(
 
     if (tracker == NULL) { return NULL; }
 
-    proc = sysconf(_SC_NPROCESSORS_ONLN);
+    proc = (uint8_t) sysconf(_SC_NPROCESSORS_ONLN);
     if (proc <= 0) { goto err_proc_load; }
 
-    bufferRA = Buffer_init(sizeof(ProcessorStats) + sizeof(CoreStats) * (unsigned long) proc, 32);
+    bufferRA = Buffer_init(sizeof(ProcessorStats) + sizeof(CoreStats) * proc, 32);
     if (bufferRA == NULL) { goto err_proc_load; }
     
     reader = Reader_init(bufferRA, proc);
     if (reader == NULL) { goto err_reader_init; }
 
-    bufferAP = Buffer_init(sizeof(ConvertedStats) + sizeof(float) * (unsigned long) proc, 32);
+    bufferAP = Buffer_init(sizeof(ConvertedStats) + sizeof(float) * proc, 32);
     if (bufferAP == NULL) { goto err_bufferAP_init; }
 
     analyzer = Analyzer_init(bufferRA, bufferAP, proc);
@@ -100,7 +101,7 @@ Tracker* Tracker_init(
     err_proc_load:
         free(tracker);
 
-    printf("[TRACKER]: INIT MEMORY ALLOC ERROR\n");
+    Logger_log("TRACKER", "INIT MEMORY ALLOC ERROR");
 
     return NULL;
 }
@@ -124,7 +125,7 @@ int Tracker_start(
 
     Logger_log("TRACKER", "STARTING READER");
 
-    if (Reader_start(tracker -> reader, &(tracker -> status)) != SUCCESS) {
+    if (Reader_start(tracker -> reader, &(tracker -> status)) != OK) {
         Logger_log("TRACKER", "ERROR WHEN STARTING READER");
         Tracker_destroy(tracker);
         return ERR_RUN;
@@ -132,7 +133,7 @@ int Tracker_start(
 
     Logger_log("TRACKER", "STARTING ANALYZER");
 
-    if (Analyzer_start(tracker -> analyzer, &(tracker -> status)) != SUCCESS) {
+    if (Analyzer_start(tracker -> analyzer, &(tracker -> status)) != OK) {
         Logger_log("TRACKER", "ERROR WHEN STARTING ANALYZER");
         Tracker_destroy(tracker);
         return ERR_RUN;
@@ -140,7 +141,7 @@ int Tracker_start(
 
     Logger_log("TRACKER", "STARTING PRINTER");
 
-    if (Printer_start(tracker -> printer, &(tracker -> status)) != SUCCESS) {
+    if (Printer_start(tracker -> printer, &(tracker -> status)) != OK) {
         Logger_log("TRACKER", "ERROR WHEN STARTING PRINTER");
         Tracker_destroy(tracker);
         return ERR_RUN;
@@ -148,7 +149,7 @@ int Tracker_start(
 
     Logger_log("TRACKER", "JOINING READER");
 
-    if (Reader_join(tracker -> reader) != SUCCESS) {
+    if (Reader_join(tracker -> reader) != OK) {
         Logger_log("TRACKER", "ERROR WHEN JOINING READER");
         Tracker_destroy(tracker);
         return ERR_JOIN;
@@ -156,7 +157,7 @@ int Tracker_start(
 
     Logger_log("TRACKER", "JOINING ANALYZER");
 
-    if (Analyzer_join(tracker -> analyzer) != SUCCESS) {
+    if (Analyzer_join(tracker -> analyzer) != OK) {
         Logger_log("TRACKER", "ERROR WHEN JOINING ANALYZER");
         Tracker_destroy(tracker);
         return ERR_JOIN;
@@ -164,7 +165,7 @@ int Tracker_start(
 
     Logger_log("TRACKER", "JOINING PRINTER");
 
-    if (Printer_join(tracker -> printer) != SUCCESS) {
+    if (Printer_join(tracker -> printer) != OK) {
         Logger_log("TRACKER", "ERROR WHEN JOINING PRINTER");
         Tracker_destroy(tracker);
         return ERR_JOIN;
@@ -172,7 +173,7 @@ int Tracker_start(
 
     Logger_log("TRACKER", "START FINISHED");
 
-    return SUCCESS;
+    return OK;
 }
 
 /*
@@ -194,7 +195,7 @@ int Tracker_terminate(
 
     Logger_log("TRACKER", "TERMINATE FINISHED");
 
-    return SUCCESS;
+    return OK;
 }
 
 /*
@@ -237,4 +238,5 @@ void Tracker_destroy(
     free(tracker);
 
     Logger_log("TRACKER", "DESTROY FINISHED");
+
 }

@@ -1,20 +1,25 @@
 /*
     AUTHOR: DENIS STOCKI                  
-    FILE: logger.h                       
-    PURPOSE: interface for logger module 
+    FILE: watchdog.h                       
+    PURPOSE: interface for watchdog module 
 */
 
 #ifndef WATCHDOG_H
 #define WATCHDOG_H
 
+// INCLUDES OF OUTSIDE LIBRARIES
 #include <signal.h>
+
+// INCLUDES OF INSIDE LIBRARIES
 #include "../notifier/notifier.h"
 
+// ENCAPSULATION ON WATCHDOG OBJECT
 typedef struct watchdog Watchdog;
 
-Watchdog* Watchdog_init(Notifier*, char*);
+// DECLARATIONS OF PROTOTYPE FUNCTIONS
+Watchdog* Watchdog_init(Notifier* const, char* const);
 int Watchdog_start(Watchdog*, volatile sig_atomic_t*);
-int Watchdog_join(Watchdog*);
+int Watchdog_join(Watchdog* const);
 void Watchdog_destroy(Watchdog*);
 
 #endif 

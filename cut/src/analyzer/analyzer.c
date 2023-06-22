@@ -21,7 +21,7 @@
 // PROTOTYPE FUNCTIONS FOR INSIDE WORLD
 static void* Analyzer_threadf(void* args);
 static int Analyzer_analyze(Analyzer* analyzer, ProcessorStats*, ConvertedStats*);
-static float Analyzer_toPercent(CoreStats*, long*, long*);
+static float Analyzer_toPercent(CoreStats*, uint64_t*, uint64_t*);
 
 // STRUCTURE FOR HOLDING ANALYZER OBJECT
 struct analyzer {
@@ -30,14 +30,13 @@ struct analyzer {
     Buffer* bufferRA;
     Buffer* bufferAP;
     pthread_t thread;
+    uint64_t* cores_total_prev;
+    uint64_t* cores_idle_prev;
+    uint64_t cpu_total_prev;
+    uint64_t cpu_idle_prev;
+    uint8_t proc;
     bool thread_started;
     bool prev_analyzed;
-    char padding[6];
-    long* cores_total_prev;
-    long* cores_idle_prev;
-    long cpu_total_prev;
-    long cpu_idle_prev;
-    long proc;
 };
 
 // STRUCTURE FOR HOLDING PARAMS PASSED TO READER THREAD FUNCTION
@@ -48,18 +47,23 @@ typedef struct ThreadParams {
 
 /*
     METHOD: Analyzer_init
-    PURPOSE: creation of Analyzer 'object'
-    RETURN: Analyzer 'object' or NULL in 
+    ARGUMENTS:
+        bufferRA - an object of Reader-Analyzer buffer
+        bufferAP - an object of Analyzer-Printer buffer
+        proc - a number of cores in a current computer
+    PURPOSE: creation of Analyzer object
+    RETURN: Analyzer object or NULL in 
         case creation was not possible 
 */
 Analyzer* Analyzer_init(
     Buffer* bufferRA,
     Buffer* bufferAP,
-    long proc
+    uint8_t proc
 ) {
     Watchdog* watchdog;
     Notifier* notifier;
     Analyzer* analyzer;
+
     Logger_log("ANALYZER", "INIT STARTED");
 
     if (
@@ -103,10 +107,11 @@ Analyzer* Analyzer_init(
 
 /*
     METHOD: Analyzer_Start
-    PURPOSE: creation and start of a given 
-        object's thread
-    RETURN: finish code meaning if function 
-        worked propely
+    ARGUMENTS:
+        analyzer - an Analyzer object to work on
+        status - a Tracker object's status variable
+    PURPOSE: creation and start of a given object's thread
+    RETURN: finish code meaning if function worked propely
 */
 int Analyzer_start(
     Analyzer* const analyzer,
@@ -138,9 +143,16 @@ int Analyzer_start(
 
     Logger_log("ANALYZER", "START FINISHED");
 
-    return SUCCESS;
+    return OK;
 }
 
+/*
+    METHOD: Analyzer_join
+    ARGUMENTS:
+        analyzer - an Analyzer object to work on
+    PURPOSE: join of a given object's thread
+    RETURN: finish code meaning if function worked propely
+*/
 int Analyzer_join(
     Analyzer* const analyzer
 ) {
@@ -154,11 +166,13 @@ int Analyzer_join(
 
     Logger_log("ANALYZER", "JOIN FINISHED");
 
-    return SUCCESS;
+    return OK;
 }
 
 /*
     METHOD: Analyzer_threadf
+    ARGUMENTS:
+        args - pointer to function's parameters
     PURPOSE: acomplishing reader's thread work
     RETURN: NULL
 */
@@ -168,12 +182,12 @@ static void* Analyzer_threadf(
     ThreadParams* params;
     ProcessorStats* stats;
     ConvertedStats converted;
-    struct timespec sleepTime;
+    struct timespec timebreak;
 
     Logger_log("ANALYZER", "THREAD FUNCTION STARTED");
 
     params = (ThreadParams*)args;
-    stats = malloc(sizeof(ProcessorStats) + sizeof(CoreStats) * (unsigned long) params -> analyzer -> proc);
+    stats = malloc(sizeof(ProcessorStats) + sizeof(CoreStats) * params -> analyzer -> proc);
 
     if (stats == NULL) {
         pthread_exit(NULL);
@@ -182,13 +196,13 @@ static void* Analyzer_threadf(
     Watchdog_start(params -> analyzer -> watchdog, params -> status);
 
     while (*(params -> status) == RUNNING) {
-        if (Buffer_pop(params -> analyzer -> bufferRA, stats) != SUCCESS) {
+        if (Buffer_pop(params -> analyzer -> bufferRA, stats) != OK) {
             free(stats);
             break;
         }
         
-        if (Analyzer_analyze(params -> analyzer, stats, &converted) == SUCCESS) {
-            if (Buffer_push(params -> analyzer -> bufferAP, &converted) != SUCCESS) {
+        if (Analyzer_analyze(params -> analyzer, stats, &converted) == OK) {
+            if (Buffer_push(params -> analyzer -> bufferAP, &converted) != OK) {
                 free(stats -> cores);
                 free(converted.percentages);
                 break;
@@ -199,10 +213,10 @@ static void* Analyzer_threadf(
 
         free(stats -> cores);
         
-        sleepTime.tv_sec = 1;
-        sleepTime.tv_nsec = 0;
+        timebreak.tv_sec = 1;
+        timebreak.tv_nsec = 0;
 
-        nanosleep(&sleepTime, NULL);
+        nanosleep(&timebreak, NULL);
     }
 
     Watchdog_join(params -> analyzer -> watchdog);
@@ -217,6 +231,10 @@ static void* Analyzer_threadf(
 
 /*
     METHOD: Analyzer_analyze
+    ARGUMENTS:
+        analyzer - an Analyzer object to work on
+        processorStats - an object of not processed yet stats
+        convertedStats - an object of processed stats
     PURPOSE: counts percentage for each core in a given ProcessorStats
     RETURN: interger meaning if the operation successed or failed with an error
 */
@@ -227,6 +245,7 @@ static int Analyzer_analyze(
 ) {
     long idle;
     long non_idle;
+
     Logger_log("ANALYZER", "ANALYZE STARTED");
 
     if (
@@ -238,26 +257,26 @@ static int Analyzer_analyze(
     }
 
     if (!analyzer -> prev_analyzed) {
-        analyzer -> cores_total_prev = malloc(sizeof(long) * (unsigned long) analyzer -> proc);
+        analyzer -> cores_total_prev = malloc(sizeof(long) * analyzer -> proc);
 
         if (analyzer -> cores_total_prev == NULL) { return ERR_ALLOC; }
         
-        analyzer -> cores_idle_prev = malloc(sizeof(long) * (unsigned long) analyzer -> proc);
+        analyzer -> cores_idle_prev = malloc(sizeof(long) * analyzer -> proc);
 
         if (analyzer -> cores_idle_prev == NULL) {
             free(analyzer -> cores_total_prev);
             return ERR_ALLOC;
         }
 
-        idle = processorStats -> average.idle 
-            + processorStats -> average.iowait;
+        idle = processorStats -> cores_average.idle 
+            + processorStats -> cores_average.iowait;
 
-        non_idle = processorStats -> average.user 
-            + processorStats -> average.nice 
-            + processorStats -> average.system 
-            + processorStats -> average.irq 
-            + processorStats -> average.sortirq
-            + processorStats -> average.steal;
+        non_idle = processorStats -> cores_average.user 
+            + processorStats -> cores_average.nice 
+            + processorStats -> cores_average.system 
+            + processorStats -> cores_average.irq 
+            + processorStats -> cores_average.sortirq
+            + processorStats -> cores_average.steal;
 
         analyzer -> cpu_total_prev = idle + non_idle;
         analyzer -> cpu_idle_prev = idle;
@@ -285,13 +304,13 @@ static int Analyzer_analyze(
         return ANALYZED;
     }
     
-    convertedStats -> percentages = malloc(sizeof(float) * (unsigned long) processorStats -> count);
+    convertedStats -> percentages = malloc(sizeof(float) * processorStats -> count);
     
     if(convertedStats -> percentages == NULL) { return ERR_ALLOC; }
 
     convertedStats -> count = processorStats -> count;
-    convertedStats -> average_percentage = Analyzer_toPercent(
-        &processorStats -> average, 
+    convertedStats -> percentages_average = Analyzer_toPercent(
+        &processorStats -> cores_average, 
         &analyzer -> cpu_total_prev, 
         &analyzer -> cpu_idle_prev
     );
@@ -306,20 +325,31 @@ static int Analyzer_analyze(
 
     Logger_log("ANALYZER", "ANALYZE FINISHED");
 
-    return SUCCESS;
+    return OK;
 }
 
+/*
+    METHOD: Analyzer_toPercent
+    ARGUMENTS:
+        stats - an object of single core stats
+        total_prev - a pointer to previous total value
+        idle_prev - a pointer to previous idle value
+    PURPOSE: counts single core's usage percentage
+    RETURN: float percentage
+*/
 static float Analyzer_toPercent(
     CoreStats* stats, 
-    long* total_prev, 
-    long* idle_prev
+    uint64_t* total_prev, 
+    uint64_t* idle_prev
 ) {
-    long idle;
-    long non_idle;
-    long total;
-    long idled;
+    uint64_t idle;
+    uint64_t non_idle;
+    uint64_t total;
+    uint64_t idled;
     float percentage;
+
     Logger_log("ANALYZER", "TOPERCENT STARTED");
+
     idle = stats -> idle 
         + stats -> iowait;
 
@@ -353,8 +383,10 @@ static float Analyzer_toPercent(
 
 /*
     METHOD: Analyzer_free
-    PURPOSE: frees reserved memory for a given Analyzer 'object' and its nested 'objects'
-    RETURN: Analyzer 'object' or NULL in 
+    ARGUMENTS:
+        analyzer - an Analyzer object to be freed
+    PURPOSE: frees reserved memory for a given Analyzer object and its nested objects
+    RETURN: Analyzer object or NULL in 
         case creation was not possible 
 */
 void Analyzer_destroy(
