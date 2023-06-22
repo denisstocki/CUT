@@ -24,12 +24,9 @@ typedef struct logger {
     pthread_t thread;
     Buffer* buffer;
     FILE* file;
+    volatile sig_atomic_t status;
+    char padding[4];
 } Logger;
-
-// STRUCTURE FOR HOLDING THREAD FUNCTION'S PARAMETERS
-typedef struct {
-    volatile sig_atomic_t* status;
-} ThreadParams;
 
 // STATIC GLOBAL VARIABLES
 static bool initialized = false;
@@ -48,14 +45,21 @@ static void* Logger_threadf(void* const);
     RETURN: int from enums, explaining result
 */
 int Logger_init(
-    Buffer* const buffer
+    void
 ) {
     FILE* file;
+    Buffer* buffer;
 
-    if (initialized || buffer == NULL) { return ERR_INIT; }
+    if (initialized) { return ERR_INIT; }
 
     file = fopen(PATH, "w");
     if (file == NULL) { return ERR_FILE_OPEN; }
+
+    buffer = Buffer_init(sizeof(char) * 256, 100);
+    if (buffer == NULL) {
+        fclose(file);
+        return ERR_ALLOC;
+    }
 
     logger = (Logger*) malloc(sizeof(Logger));
 
@@ -66,7 +70,8 @@ int Logger_init(
     
     *logger = (Logger) {
         .buffer = buffer,
-        .file = file
+        .file = file,
+        .status = CREATED
     };
 
     initialized = true;
@@ -104,21 +109,13 @@ int Logger_join(
     RETURN: int from enums, explaining result
 */
 int Logger_start(
-    volatile sig_atomic_t* status
+    void
 ) {
-    ThreadParams* params;
-
     if (started) { return ERR_RUN; }
     
-    params = (ThreadParams*)malloc(sizeof(ThreadParams));
+    logger -> status = RUNNING;
 
-    if (params == NULL) { return ERR_ALLOC; }
-
-    *params = (ThreadParams) {
-        .status = status
-    };
-
-    if (pthread_create(&(logger -> thread), NULL, Logger_threadf, (void*) params) != 0) {
+    if (pthread_create(&(logger -> thread), NULL, Logger_threadf, NULL) != 0) {
         fclose(logger -> file);
         free(logger);
         return ERR_CREATE; 
@@ -139,31 +136,33 @@ int Logger_start(
 static void* Logger_threadf(
     void* const args
 ) {
-    ThreadParams* params;
-    struct timespec sleepTime;
     char* message;
 
-    params = (ThreadParams*) args;
+    (void) args;
+
     message = malloc(sizeof(char) * 256);
 
     if (message == NULL) {pthread_exit(NULL); }
 
-    while (*(params -> status) == RUNNING) {
+    while (logger -> status == RUNNING) {
         if (Buffer_pop(logger -> buffer, message) != SUCCESS) {
             break;
         }
 
         fprintf(logger -> file, "%s\n", message);
         fflush(logger -> file);
+    }
 
-        sleepTime.tv_sec = 1;
-        sleepTime.tv_nsec = 0;
+    while (!Buffer_isEmpty(logger -> buffer)) {
+        if (Buffer_pop(logger -> buffer, message) != SUCCESS) {
+            break;
+        }
 
-        nanosleep(&sleepTime, NULL);
+        fprintf(logger -> file, "%s\n", message);
+        fflush(logger -> file);
     }
     
     free(message);
-    free(params);
 
     pthread_exit(NULL);
 }
@@ -193,6 +192,12 @@ int Logger_log(
     return SUCCESS;
 }
 
+void Logger_terminate(
+    void
+) {
+    logger -> status = TERMINATED;
+}
+
 /*
     METHOD: Logger_destroy
     ARGUMENTS: none
@@ -203,5 +208,8 @@ void Logger_destroy(
     void
 ) {
     fclose(logger -> file);
+
+    Buffer_destroy(logger -> buffer);
+
     free(logger);
 }

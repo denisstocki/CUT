@@ -14,10 +14,11 @@
 #include "../buffer/buffer.h"
 
 // DECLARATIONS OF OUTSIDE PROTOTYPES
-int Logger_init(Buffer* const);
+int Logger_init(void);
 int Logger_join(void);
-int Logger_start(volatile sig_atomic_t*);
+int Logger_start(void);
 int Logger_log(char* const, char* const);
+void Logger_terminate(void);
 void Logger_destroy(void);
 
 #endif 

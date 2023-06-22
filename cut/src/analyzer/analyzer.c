@@ -12,6 +12,7 @@
 #include "../enums/enums.h"
 #include "../watchdog/watchdog.h"
 #include "../notifier/notifier.h"
+#include "../logger/logger.h"
 #include "../stats/stats.h"
 
 // PROTOTYPE FUNCTIONS FOR INSIDE WORLD
@@ -56,7 +57,7 @@ Analyzer* Analyzer_init(
     Watchdog* watchdog;
     Notifier* notifier;
     Analyzer* analyzer;
-    printf("[ANALYZER]: INIT STARTED\n");
+    Logger_log("ANALYZER", "INIT STARTED");
 
     if (
         bufferRA == NULL || 
@@ -92,7 +93,7 @@ Analyzer* Analyzer_init(
         .proc = proc
     };
 
-    printf("[ANALYZER]: INIT FINISHED\n");
+    Logger_log("ANALYZER", "INIT FINISHED");
 
     return analyzer;
 }
@@ -110,7 +111,7 @@ int Analyzer_start(
 ) {
     ThreadParams* params;
 
-    printf("[ANALYZER]: START STARTED\n");
+    Logger_log("ANALYZER", "START STARTED");
 
     if (
         analyzer == NULL ||
@@ -132,7 +133,7 @@ int Analyzer_start(
 
     analyzer -> thread_started = true;
 
-    printf("[ANALYZER]: START FINISHED\n");
+    Logger_log("ANALYZER", "START FINISHED");
 
     return SUCCESS;
 }
@@ -140,7 +141,7 @@ int Analyzer_start(
 int Analyzer_join(
     Analyzer* const analyzer
 ) {
-    printf("[ANALYZER]: JOIN STARTED\n");
+    Logger_log("ANALYZER", "JOIN STARTED");
 
     if (analyzer == NULL) { return ERR_PARAMS; }
     if (analyzer -> thread_started == false) { return ERR_PARAMS; }
@@ -148,7 +149,7 @@ int Analyzer_join(
         return ERR_JOIN;
     }
 
-    printf("[ANALYZER]: JOIN FINISHED\n");
+    Logger_log("ANALYZER", "JOIN FINISHED");
 
     return SUCCESS;
 }
@@ -166,7 +167,7 @@ static void* Analyzer_threadf(
     ConvertedStats converted;
     struct timespec sleepTime;
 
-    printf("[ANALYZER]: THREAD FUNCTION STARTED\n");
+    Logger_log("ANALYZER", "THREAD FUNCTION STARTED");
 
     params = (ThreadParams*)args;
     stats = malloc(sizeof(ProcessorStats) + sizeof(CoreStats) * (unsigned long) params -> analyzer -> proc);
@@ -203,7 +204,7 @@ static void* Analyzer_threadf(
 
     Watchdog_join(params -> analyzer -> watchdog);
 
-    printf("[ANALYZER]: THREAD FUNCTION FINISHED\n");
+    Logger_log("ANALYZER", "THREAD FUNCTION FINISHED");
 
     free(stats);
     free(params);
@@ -223,7 +224,7 @@ static int Analyzer_analyze(
 ) {
     long idle;
     long non_idle;
-    // printf("[ANALYZER]: ANALYZE STARTED\n");
+    Logger_log("ANALYZER", "ANALYZE STARTED");
 
     if (
         processorStats == NULL || 
@@ -300,7 +301,7 @@ static int Analyzer_analyze(
         );
     }
 
-    // printf("[ANALYZER]: ANALYZE FINISHED\n");
+    Logger_log("ANALYZER", "ANALYZE FINISHED");
 
     return SUCCESS;
 }
@@ -315,7 +316,7 @@ static float Analyzer_toPercent(
     long total;
     long idled;
     float percentage;
-    // printf("[ANALYZER]: toPercent started\n");
+    Logger_log("ANALYZER", "TOPERCENT STARTED");
     idle = stats -> idle 
         + stats -> iowait;
 
@@ -342,7 +343,7 @@ static float Analyzer_toPercent(
 
     *idle_prev = idle;
 
-    // printf("[ANALYZER]: toPercent finished\n");
+    Logger_log("ANALYZER", "TOPERCENT FINISHED");
 
     return percentage;
 }
@@ -356,7 +357,7 @@ static float Analyzer_toPercent(
 void Analyzer_destroy(
     Analyzer* analyzer
 ) {
-    printf("[ANALYZER]: DESTROY STARTED\n");
+    Logger_log("ANALYZER", "DESTROY STARTED");
 
     if (analyzer == NULL) { return; }
 
@@ -368,5 +369,5 @@ void Analyzer_destroy(
 
     free(analyzer);
 
-    printf("[ANALYZER]: DESTROY FINISHED\n");
+    Logger_log("ANALYZER", "DESTROY FINISHED");
 }

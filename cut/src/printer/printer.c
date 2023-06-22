@@ -11,6 +11,7 @@
 #include "printer.h"
 #include "../enums/enums.h"
 #include "../watchdog/watchdog.h"
+#include "../logger/logger.h"
 #include "../notifier/notifier.h"
 #include "../stats/stats.h"
 
@@ -48,7 +49,7 @@ Printer* Printer_init(
     Notifier* notifier;
     Printer* printer;
 
-    printf("[PRINTER]: INIT STARTED\n");
+    Logger_log("PRINTER", "INIT STARTED");
 
     if (bufferAP == NULL || proc <= 0) { return NULL; }
     
@@ -72,7 +73,7 @@ Printer* Printer_init(
         .thread_started = false
     };
 
-    printf("[PRINTER]: INIT FINISHED\n");
+    Logger_log("PRINTER", "INIT FINISHED");
 
     return printer;
 }
@@ -83,7 +84,7 @@ int Printer_start(
 ) {
     ThreadParams* params;
 
-    printf("[PRINTER]: START STARTED\n");
+    Logger_log("PRINTER", "START STARTED");
 
     if (
         printer == NULL ||
@@ -105,7 +106,7 @@ int Printer_start(
 
     printer -> thread_started = true;
 
-    printf("[PRINTER]: START FINISHED\n");
+    Logger_log("PRINTER", "START FINISHED");
 
     return SUCCESS;
 }
@@ -113,7 +114,7 @@ int Printer_start(
 int Printer_join(
     Printer* const printer
 ) {
-    printf("[PRINTER]: JOIN STARTED\n");
+    Logger_log("PRINTER", "JOIN STARTED");
 
     if (printer == NULL) { return ERR_PARAMS; }
     if (printer -> thread_started == false) { return ERR_PARAMS; }
@@ -121,7 +122,7 @@ int Printer_join(
         return ERR_JOIN;
     }
 
-    printf("[PRINTER]: JOIN FINISHED\n");
+    Logger_log("PRINTER", "JOIN FINISHED");
 
     return SUCCESS;
 }
@@ -133,7 +134,7 @@ static void* Printer_threadf(
     ConvertedStats* converted;
     struct timespec sleepTime;
 
-    printf("[PRINTER]: THREAD FUNCTION STARTED\n");
+    Logger_log("PRINTER", "THREAD FUNCTION STARTED");
 
     params = (ThreadParams*)args;
     converted = malloc(sizeof(ConvertedStats) + sizeof(float) * (unsigned long) params -> printer -> proc);
@@ -164,7 +165,7 @@ static void* Printer_threadf(
 
     Watchdog_join(params -> printer -> watchdog);
 
-    printf("[ANALYZER]: THREAD FUNCTION FINISHED\n");
+    Logger_log("PRINTER", "THREAD FUNCTION FINISHED");
 
     free(params);
     free(converted);
@@ -175,6 +176,7 @@ static void* Printer_threadf(
 static void Printer_print(
     ConvertedStats* convertedStats
 ) {
+    Logger_log("PRINTER", "PRINT STARTED");
     if (convertedStats == NULL) { return; }
     
     printf("\033[H\033[J");
@@ -194,12 +196,15 @@ static void Printer_print(
     }
 
     printf("\n");
+    Logger_log("PRINTER", "PRINT FINISHED");
 }
 
 static void Printer_toScreen(
     float percentage
 ) {
-    int progress = (int)(percentage / 10.0f);
+    int progress;
+    Logger_log("PRINTER", "TOSCREEN STARTED");
+    progress = (int)(percentage / 10.0f);
     
     printf("[");
 
@@ -210,6 +215,7 @@ static void Printer_toScreen(
         printf(" ");
 
     printf("] %0.2f%%", (double)percentage);
+    Logger_log("PRINTER", "TOSCREEN FINISHED");
 }
 
 /*
@@ -221,7 +227,7 @@ static void Printer_toScreen(
 void Printer_destroy(
     Printer* printer
 ) {
-    printf("[PRINTER]: DESTROY STARTED\n");
+    Logger_log("PRINTER", "DESTROY STARTED");
 
     if (printer == NULL) { return; }
 
@@ -230,5 +236,5 @@ void Printer_destroy(
     
     free(printer);
 
-    printf("[PRINTER]: DESTROY FINISHED\n");
+    Logger_log("PRINTER", "DESTROY FINISHED");
 }

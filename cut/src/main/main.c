@@ -11,6 +11,7 @@
 
 // INCLUDES OF INSIDE LIBRARIES
 #include "../tracker/tracker.h"
+#include "../logger/logger.h"
 #include "../enums/enums.h"
 
 // PROTOTYPE FUNCTIONS DECLARATIONS
@@ -48,16 +49,64 @@ void handle_sigterm(
 int main(
     void
 ) {
-    tracker = Tracker_init();
-
-    if (tracker == NULL) { return -1; }
-    
     signal(SIGINT, handle_sigterm);
     signal(SIGTERM, handle_sigterm);
 
-    if (Tracker_start(tracker) != SUCCESS) { return -1; }
+    if (Logger_init() != SUCCESS) {
+        printf("[MAIN]: ERROR WHEN CREATING LOGGER\n");
+        return -1;
+    }
+
+    if (Logger_start() != SUCCESS) {
+        printf("[MAIN]: ERROR WHEN STARTING LOGGER\n");
+        Logger_destroy();
+        return -1;
+    }
+
+    Logger_log("MAIN", "PROGRAMME STARTED");
+
+    tracker = Tracker_init();
+
+    if (tracker == NULL) { 
+        Logger_log("MAIN", "ERROR WHEN CREATING TRACKER");
+        Logger_terminate();
+
+        if (Logger_join() != SUCCESS) {
+            printf("[MAIN]: ERROR WHEN JOINING LOGGER\n");
+        }
+
+        Logger_destroy();
+
+        return -1; 
+    }
+
+    if (Tracker_start(tracker) != SUCCESS) { 
+        Logger_log("MAIN", "ERROR WHEN STARTING TRACKER");
+        Tracker_destroy(tracker);
+        Logger_terminate();
+
+        if (Logger_join() != SUCCESS) {
+            printf("[MAIN]: ERROR WHEN JOINING LOGGER\n");
+        }
+
+        Logger_destroy();
+        return -1; 
+    }
 
     Tracker_destroy(tracker);
+    printf("[LOGGER]: LOGGING REMAINING LOGS...\n");
+
+    Logger_log("MAIN", "PROGRAMME FINISHED");
+
+    Logger_terminate();
+
+    if (Logger_join() != SUCCESS) {
+        printf("[MAIN]: ERROR WHEN JOINING LOGGER\n");
+        Logger_destroy();
+        return -1;
+    }
+
+    Logger_destroy();
     
     return 0;
 }

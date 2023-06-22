@@ -56,7 +56,7 @@ Reader* Reader_init(
     Notifier* notifier;
     Reader* reader;
 
-    // Logger_log("READER", "INIT STARTED");
+    Logger_log("READER", "INIT STARTED");
 
     if (proc <= 0 || buffer == NULL) { return NULL; }
     
@@ -80,7 +80,7 @@ Reader* Reader_init(
         .proc = proc
     };
 
-    // Logger_log("READER", "INIT FINISHED");
+    Logger_log("READER", "INIT FINISHED");
 
     return reader;
 }
@@ -99,7 +99,7 @@ int Reader_start(
 ) {
     ThreadParams* params;
 
-    // Logger_log("READER", "START STARTED");
+    Logger_log("READER", "START STARTED");
 
     if (
         reader == NULL ||
@@ -119,7 +119,7 @@ int Reader_start(
         return ERR_CREATE;
     }
 
-    // Logger_log("READER", "START FINISHED");
+    Logger_log("READER", "START FINISHED");
 
     return SUCCESS;
 }
@@ -134,12 +134,12 @@ int Reader_start(
 int Reader_join(
     Reader* const reader
 ) {
-    // Logger_log("READER", "JOIN STARTED");
+    Logger_log("READER", "JOIN STARTED");
 
     if (reader == NULL) { return ERR_PARAMS; }
     if (pthread_join(reader -> thread, NULL) != 0) { return ERR_JOIN; }
 
-    // Logger_log("READER", "JOIN FINISHED");
+    Logger_log("READER", "JOIN FINISHED");
 
     return SUCCESS;
 }
@@ -158,32 +158,32 @@ static void* Reader_threadf(
     ProcessorStats stats;
     struct timespec timebreak;
 
-    // Logger_log("READER", "THREAD FUNCTION STARTED");
+    Logger_log("READER", "THREAD FUNCTION STARTED");
 
     params = (ThreadParams*) args;
 
-    // Logger_log("READER", "STARTING WATCHDOG THREAD");
+    Logger_log("READER", "STARTING WATCHDOG THREAD");
 
     if (Watchdog_start(params -> reader -> watchdog, params -> status) != SUCCESS) {
-        // Logger_log("READER", "COULD NOT START WATCHDOG THREAD");
+        Logger_log("READER", "COULD NOT START WATCHDOG THREAD");
         free(params);
         pthread_exit(NULL);
     }
 
     while (*(params -> status) == RUNNING) {
         if (Reader_read(&stats, params -> reader -> proc) != SUCCESS) {
-            // Logger_log("READER", "READ FAILED");
+            Logger_log("READER", "READ FAILED");
             break;
         }
         
         if (Buffer_push(params -> reader -> buffer, &stats) != SUCCESS) {
-            // Logger_log("READER", "PUSH FAILED");
+            Logger_log("READER", "PUSH FAILED");
             free(stats.cores);
             break;
         }
 
         if (Notifier_notify(params -> reader -> notifier) != SUCCESS) {
-            // Logger_log("READER", "NOTIFY FAILED");
+            Logger_log("READER", "NOTIFY FAILED");
             free(stats.cores);
             break;
         }
@@ -194,22 +194,17 @@ static void* Reader_threadf(
         nanosleep(&timebreak, NULL);
     }
 
-    // Logger_log("READER", "JOINING WATCHDOG THREAD");
+    Logger_log("READER", "JOINING WATCHDOG THREAD");
 
     Watchdog_join(params -> reader -> watchdog);
 
     free(params);
 
-    // Logger_log("READER", "THREAD FUNCTION FINISHED");
+    Logger_log("READER", "THREAD FUNCTION FINISHED");
 
     pthread_exit(NULL);
 }
 
-/*
-    METHOD: Reader_read
-    PURPOSE: reads all required data from a saved file field
-    RETURN: Stats 'object' including necessary data or null
-*/
 /*
     METHOD: Reader_read
     ARUGMENTS:
@@ -225,7 +220,7 @@ int Reader_read(
     FILE* file;
     int coreCount;
 
-    // Logger_log("READER", "READ STARTED");
+    Logger_log("READER", "READ STARTED");
 
     if (processorStats == NULL || proc <= 0) { return ERR_PARAMS; }
     
@@ -286,7 +281,7 @@ int Reader_read(
 
     processorStats -> count = coreCount;
 
-    // Logger_log("READER", "READ FINISHED");
+    Logger_log("READER", "READ FINISHED");
 
     return SUCCESS; 
 }
@@ -300,7 +295,7 @@ int Reader_read(
 void Reader_destroy(
     Reader* const reader
 ) {
-    printf("[READER]: DESTROY STARTED\n");
+    Logger_log("READER", "DESTROY STARTED");
 
     if (reader == NULL) { return; }
 
@@ -310,5 +305,5 @@ void Reader_destroy(
 
     free(reader);
 
-    printf("[READER]: DESTROY FINISHED\n");
+    Logger_log("READER", "DESTROY FINISHED");
 }

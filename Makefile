@@ -1,27 +1,23 @@
 CC = clang
-CFLAGS = -Weverything -std=c99
-LDFLAGS = -pthread
+CFLAGS = -Weverything -std=c99 -pthread
+VFLAGS = --leak-check=full --show-leak-kinds=all --track-origins=yes
 
 SRC_DIR = cut/src
 OBJ_DIR = cut/out
 
 SOURCES = $(wildcard $(SRC_DIR)/**/*.c)
-OBJECTS = $(patsubst $(SRC_DIR)/%.c,$(OBJ_DIR)/%.o,$(SOURCES))
 EXECUTABLE = main
 
 .PHONY: all clean run
 
-all: $(EXECUTABLE)
+all:
+	$(CC) $(CFLAGS) $(SOURCES) -o $(OBJ_DIR)/$(EXECUTABLE)
 
-$(EXECUTABLE): $(OBJECTS)
-	$(CC) $(LDFLAGS) $^ -o $@
+run:
+	./$(OBJ_DIR)/$(EXECUTABLE)
 
-$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
-	@mkdir -p $(@D)
-	$(CC) $(CFLAGS) -c $< -o $@
-
-run: $(EXECUTABLE)
-	./$(EXECUTABLE)
+valgrind:
+	valgrind $(VFLAGS) ./$(EXECUTABLE)
 
 clean:
-	rm -rf $(OBJ_DIR) $(EXECUTABLE)
+	rm -rf $(OBJ_DIR)/$(EXECUTABLE)
