@@ -60,12 +60,10 @@ int Notifier_notify(
     if (notifier == NULL) { return ERR_PARAMS; }
     
     pthread_mutex_lock(&(notifier -> mutex));
-
     notifier -> notified = true;
-
     pthread_mutex_unlock(&(notifier -> mutex));
 
-    return SUCCESS;
+    return OK;
 }
 
 /*
@@ -83,15 +81,11 @@ int Notifier_check(
     if (notifier == NULL || notified == NULL) { return ERR_PARAMS; }
     
     pthread_mutex_lock(&(notifier -> mutex));
-
     *notified = notifier -> notified;
-
     notifier -> notified = false;
-    
-
     pthread_mutex_unlock(&(notifier -> mutex));
 
-    return SUCCESS;
+    return OK;
 }
 
 /*

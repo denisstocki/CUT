@@ -1,7 +1,7 @@
 /*
     AUTHOR: DENIS STOCKI                  
     FILE: main.c                       
-    PURPOSE: handling of tracker object's functionality
+    PURPOSE: handling of tracker and logger objects' functionality
 */
 
 // INCLUDES OF OUTSIDE LIBRARIES
@@ -15,21 +15,23 @@
 #include "../enums/enums.h"
 
 // PROTOTYPE FUNCTIONS DECLARATIONS
-void handle_sigterm(int const);
+void handle_signal(int const);
 
 // GLOBAL VARIABLES DECLARATIONS
 static Tracker* tracker;
 
 /*
-    METHOD: handle_sigterm
+    METHOD: handle_signal
     ARGUMENTS: 
         signum - id of a received signal
-    PURPOSE: invocation of behaviour reserved for sigterm signal
+    PURPOSE: invocation of behaviour reserved for sigterm and sigint signal
     RETURN: nothing
 */
-void handle_sigterm(
+void handle_signal(
     int const signum
 ) {
+    Logger_log("MAIN", "HANDLE SIGNAL STARTED");
+
     if (
         signum == SIGINT || 
         signum == SIGTERM
@@ -37,20 +39,24 @@ void handle_sigterm(
         printf("\n");
         Tracker_terminate(tracker);
     }
+
+    Logger_log("MAIN", "HANDLE SIGNAL STARTED");
 }
 
 /*
     METHOD: main
     ARGUMENTS: none
-    PURPOSE: invocation of behaviour expected from Tracker object
+    PURPOSE: invocation of behaviour expected from Tracker and Logger objects
     RETURN: an integer number describing correction 
         of this function's execution
 */
 int main(
     void
 ) {
-    signal(SIGINT, handle_sigterm);
-    signal(SIGTERM, handle_sigterm);
+    printf("STARTING PROGRAMME...\n");
+
+    signal(SIGINT, handle_signal);
+    signal(SIGTERM, handle_signal);
 
     if (Logger_init() != SUCCESS) {
         printf("[MAIN]: ERROR WHEN CREATING LOGGER\n");
@@ -82,7 +88,9 @@ int main(
 
     if (Tracker_start(tracker) != SUCCESS) { 
         Logger_log("MAIN", "ERROR WHEN STARTING TRACKER");
+
         Tracker_destroy(tracker);
+
         Logger_terminate();
 
         if (Logger_join() != SUCCESS) {
@@ -90,14 +98,15 @@ int main(
         }
 
         Logger_destroy();
+
         return -1; 
     }
 
     Tracker_destroy(tracker);
-    printf("[LOGGER]: LOGGING REMAINING LOGS...\n");
+
+    printf("LOGGING REMAINING LOGS...\n");
 
     Logger_log("MAIN", "PROGRAMME FINISHED");
-
     Logger_terminate();
 
     if (Logger_join() != SUCCESS) {
@@ -107,6 +116,8 @@ int main(
     }
 
     Logger_destroy();
+
+    printf("PROGRAMME FINISHED !\n");
     
     return 0;
 }

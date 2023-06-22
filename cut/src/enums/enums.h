@@ -7,12 +7,14 @@
 #ifndef ENUMS_H
 #define ENUMS_H
 
+// ENUM FOR STATE VARIABLES
 enum states {
     CREATED,
     RUNNING, 
     TERMINATED
 };
 
+// ENUM FOR FUNCTIONS RETURN VALUES
 enum errors {
     ERR_ALLOC,
     ERR_PARAMS,
@@ -23,8 +25,8 @@ enum errors {
     ERR_READ,
     ERR_RUN,
     ERR_PUSH,
-    SUCCESS,
     ERR_INIT,
+    OK,
     INITIALIZED,
     ANALYZED
 };

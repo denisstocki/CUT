@@ -17,7 +17,7 @@
 #include "logger.h"
 
 // DEFINITIONS OF MACRO
-#define PATH "log.txt"
+#define PATH "cut/logs/log.txt"
 
 // STRUCTURE FOR HOLDING LOGGER SINGLETON OBJECT
 typedef struct logger {

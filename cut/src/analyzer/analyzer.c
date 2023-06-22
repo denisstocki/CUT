@@ -4,10 +4,13 @@
     PURPOSE: implementation of analyzer module
 */
 
+// INCLUDES OF OUTSIDE LIBRARIES
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
 #include <stdbool.h>
+
+// INCLUDES OF INSIDE LIBRARIES
 #include "analyzer.h"
 #include "../enums/enums.h"
 #include "../watchdog/watchdog.h"
