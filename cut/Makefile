@@ -28,7 +28,7 @@ INCS_INC := $(foreach i, $(INC_DIR), -I$i)
 LIBS_INC := $(foreach l, $(LIBS), -l$l)
 
 ifeq ($(CC), clang)
-	C_FLAGS += -Weverything
+	C_FLAGS += -Weverything -Wno-vla -Wno-disabled-macro-expansion -Wno-deprecated-pragma
 endif
 
 ifeq ("$(origin O)", "command line")
@@ -47,7 +47,7 @@ C_FLAGS += $(OPT) $(GGDB) $(DEP_FLAGS)
 
 print-% : ; $(info $* is a $(flavor $*) variable set to [$($*)]) @true
 
-all: $(APP_TARGET)
+all: logs $(APP_TARGET)
 
 test: $(TEST_TARGET)
 
@@ -74,3 +74,6 @@ include $(wildcard $(APP_DEPS))
 
 $(TEST_DEPS):
 include $(wildcard $(TEST_DEPS))
+
+logs:
+	mkdir -p logs
